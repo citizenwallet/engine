@@ -2,6 +2,7 @@ package ws
 
 import (
 	"log"
+	"net/http"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -13,6 +14,7 @@ type Client struct {
 }
 
 type ConnectionManager struct {
+	topic      string
 	clients    map[*Client]bool
 	register   chan *Client
 	unregister chan *Client
@@ -20,8 +22,9 @@ type ConnectionManager struct {
 	mutex      sync.Mutex
 }
 
-func NewConnectionManager() *ConnectionManager {
+func NewConnectionManager(topic string) *ConnectionManager {
 	return &ConnectionManager{
+		topic:      topic,
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
@@ -29,9 +32,31 @@ func NewConnectionManager() *ConnectionManager {
 	}
 }
 
-func (h *Handlers) readPump(client *Client) {
+func (cm *ConnectionManager) Connect(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true // Allow all origins for this example
+		},
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Error upgrading to WebSocket:", err)
+		return
+	}
+
+	client := &Client{conn: conn, send: make(chan []byte, 256)}
+	cm.register <- client
+
+	go cm.readPump(client)
+	go cm.writePump(client)
+}
+
+func (cm *ConnectionManager) readPump(client *Client) {
 	defer func() {
-		h.Manager.unregister <- client
+		cm.unregister <- client
 		client.conn.Close()
 	}()
 
@@ -50,7 +75,7 @@ func (h *Handlers) readPump(client *Client) {
 	}
 }
 
-func (h *Handlers) writePump(client *Client) {
+func (cm *ConnectionManager) writePump(client *Client) {
 	defer func() {
 		client.conn.Close()
 	}()
