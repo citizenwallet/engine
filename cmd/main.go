@@ -4,17 +4,17 @@ import (
 	"flag"
 	"log"
 
-	"github.com/citizenwallet/engine/internal/ws"
+	"github.com/citizenwallet/engine/internal/api"
 )
 
 func main() {
 	log.Default().Println("starting engine...")
 
-	port := flag.Int("port", 8080, "port to listen on")
+	port := flag.Int("port", 3001, "port to listen on")
 
 	flag.Parse()
 
-	s := ws.NewServer()
+	s := api.NewServer()
 
 	wsr := s.CreateRoutes()
 
