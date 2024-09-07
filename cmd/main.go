@@ -1,7 +1,27 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"log"
+
+	"github.com/citizenwallet/engine/internal/ws"
+)
 
 func main() {
-	fmt.Println("Hello, World!")
+	log.Default().Println("starting engine...")
+
+	port := flag.Int("port", 8080, "port to listen on")
+
+	flag.Parse()
+
+	s := ws.NewServer()
+
+	wsr := s.CreateRoutes()
+
+	err := s.Start(*port, wsr)
+	if err != nil {
+		log.Default().Fatalf("error starting server: %v", err)
+	}
+
+	log.Default().Println("engine stopped")
 }
