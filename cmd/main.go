@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/citizenwallet/engine/internal/api"
+	"github.com/citizenwallet/engine/internal/ws"
 )
 
 func main() {
@@ -14,7 +15,12 @@ func main() {
 
 	flag.Parse()
 
-	s := api.NewServer()
+	pools := make(map[string]*ws.ConnectionPool)
+
+	pools["0x123:0x456"] = ws.NewConnectionPool("0x123:0x456")
+	go pools["0x123:0x456"].Run()
+
+	s := api.NewServer(pools)
 
 	wsr := s.CreateRoutes()
 

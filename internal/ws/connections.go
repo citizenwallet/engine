@@ -13,7 +13,7 @@ type Client struct {
 	send chan []byte
 }
 
-type ConnectionManager struct {
+type ConnectionPool struct {
 	topic      string
 	clients    map[*Client]bool
 	register   chan *Client
@@ -22,8 +22,8 @@ type ConnectionManager struct {
 	mutex      sync.Mutex
 }
 
-func NewConnectionManager(topic string) *ConnectionManager {
-	return &ConnectionManager{
+func NewConnectionPool(topic string) *ConnectionPool {
+	return &ConnectionPool{
 		topic:      topic,
 		clients:    make(map[*Client]bool),
 		register:   make(chan *Client),
@@ -32,7 +32,7 @@ func NewConnectionManager(topic string) *ConnectionManager {
 	}
 }
 
-func (cm *ConnectionManager) Connect(w http.ResponseWriter, r *http.Request) {
+func (cm *ConnectionPool) Connect(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -54,7 +54,7 @@ func (cm *ConnectionManager) Connect(w http.ResponseWriter, r *http.Request) {
 	go cm.writePump(client)
 }
 
-func (cm *ConnectionManager) readPump(client *Client) {
+func (cm *ConnectionPool) readPump(client *Client) {
 	defer func() {
 		cm.unregister <- client
 		client.conn.Close()
@@ -72,10 +72,14 @@ func (cm *ConnectionManager) readPump(client *Client) {
 		if string(message) == "ping" {
 			client.send <- []byte("pong")
 		}
+
+		if string(message) == "ding" {
+			cm.broadcast <- []byte("dong")
+		}
 	}
 }
 
-func (cm *ConnectionManager) writePump(client *Client) {
+func (cm *ConnectionPool) writePump(client *Client) {
 	defer func() {
 		client.conn.Close()
 	}()
@@ -102,14 +106,18 @@ func (cm *ConnectionManager) writePump(client *Client) {
 }
 
 // Run this method in a separate goroutine
-func (cm *ConnectionManager) Run() {
+// Run manages the main loop for the ConnectionPool, handling client registration,
+// unregistration, and message broadcasting. This method should be run in a separate goroutine.
+func (cm *ConnectionPool) Run() {
 	for {
 		select {
 		case client := <-cm.register:
+			// Register a new client
 			cm.mutex.Lock()
 			cm.clients[client] = true
 			cm.mutex.Unlock()
 		case client := <-cm.unregister:
+			// Unregister a client and close its send channel
 			cm.mutex.Lock()
 			if _, ok := cm.clients[client]; ok {
 				delete(cm.clients, client)
@@ -117,16 +125,33 @@ func (cm *ConnectionManager) Run() {
 			}
 			cm.mutex.Unlock()
 		case message := <-cm.broadcast:
-			cm.mutex.Lock()
-			for client := range cm.clients {
-				select {
-				case client.send <- message:
-				default:
-					close(client.send)
-					delete(cm.clients, client)
-				}
-			}
-			cm.mutex.Unlock()
+			// Broadcast a message to all connected clients
+			cm.BroadcastMessage(message)
+		}
+	}
+}
+
+// broadcastMessage sends a message to all connected clients.
+// If a client's send channel is full, it is unregistered.
+func (cm *ConnectionPool) BroadcastMessage(message []byte) {
+	// Create a copy of the clients map to avoid holding the lock while sending
+	cm.mutex.Lock()
+	clients := make([]*Client, 0, len(cm.clients))
+	for client := range cm.clients {
+		clients = append(clients, client)
+	}
+	cm.mutex.Unlock()
+
+	// Send the message to each client
+	for _, client := range clients {
+		select {
+		case client.send <- message:
+			// Message sent successfully
+		default:
+			// Client's send channel is full, unregister it
+			go func(c *Client) {
+				cm.unregister <- c
+			}(client)
 		}
 	}
 }

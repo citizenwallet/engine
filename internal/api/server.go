@@ -4,12 +4,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/citizenwallet/engine/internal/ws"
 )
 
-type Server struct{}
+type Server struct {
+	pools map[string]*ws.ConnectionPool
+}
 
-func NewServer() *Server {
-	return &Server{}
+func NewServer(pools map[string]*ws.ConnectionPool) *Server {
+	return &Server{pools: pools}
 }
 
 func (s *Server) Start(port int, handler http.Handler) error {

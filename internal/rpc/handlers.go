@@ -7,12 +7,12 @@ import (
 )
 
 type Handlers struct {
-	Manager *ws.ConnectionManager
+	Manager *ws.ConnectionPool
 }
 
 func NewHandlers() *Handlers {
 	return &Handlers{
-		Manager: ws.NewConnectionManager("rpc"),
+		Manager: ws.NewConnectionPool("rpc"),
 	}
 }
 

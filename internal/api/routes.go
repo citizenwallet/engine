@@ -25,13 +25,11 @@ func (s *Server) AddMiddleware(cr *chi.Mux) *chi.Mux {
 func (s *Server) CreateRoutes() *chi.Mux {
 	cr := chi.NewRouter()
 
-	events := events.NewHandlers()
-	go events.Manager.Run()
+	events := events.NewHandlers(s.pools)
 
 	rpc := rpc.NewHandlers()
-	go rpc.Manager.Run()
 
-	cr.Get("/events", events.HandleConnection) // for listening to events
-	cr.Get("/rpc", rpc.HandleConnection)       // for sending RPC calls
+	cr.Get("/events/{contract}/{topic}", events.HandleConnection) // for listening to events
+	cr.Get("/rpc", rpc.HandleConnection)                          // for sending RPC calls
 	return cr
 }
