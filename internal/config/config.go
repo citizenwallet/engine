@@ -9,6 +9,9 @@ import (
 )
 
 type Config struct {
+	ChainName    string `env:"CHAIN_NAME,required"`
+	RPCURL       string `env:"RPC_URL,required"`
+	RPCWSURL     string `env:"RPC_WS_URL,required"`
 	DBUser       string `env:"DB_USER,required"`
 	DBPassword   string `env:"DB_PASSWORD,required"`
 	DBName       string `env:"DB_NAME,required"`
