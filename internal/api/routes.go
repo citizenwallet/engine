@@ -38,21 +38,24 @@ func (s *Server) CreateRoutes() *chi.Mux {
 		cr.Get("/", v.Current)
 	})
 
-	cr.Route("/logs/v2/transfers", func(cr chi.Router) {
-		cr.Route("/{token_address}", func(cr chi.Router) {
-			cr.Route("/{signature}", func(cr chi.Router) {
-				cr.Get("/", l.Get)
-				cr.Get("/all", l.GetAll)
+	cr.Route("/v1", func(cr chi.Router) {
+		cr.Route("/logs/transfers", func(cr chi.Router) {
+			cr.Route("/{token_address}", func(cr chi.Router) {
+				cr.Route("/{signature}", func(cr chi.Router) {
+					cr.Get("/", l.Get)
+					cr.Get("/all", l.GetAll)
 
-				cr.Get("/new", l.GetNew)
-				cr.Get("/new/all", l.GetAllNew)
+					cr.Get("/new", l.GetNew)
+					cr.Get("/new/all", l.GetAllNew)
+				})
+
+				cr.Get("/tx/{hash}", l.GetSingle)
 			})
-
-			cr.Get("/tx/{hash}", l.GetSingle)
 		})
+
+		cr.Get("/events/{contract}/{topic}", events.HandleConnection) // for listening to events
+		cr.Get("/rpc", rpc.HandleConnection)                          // for sending RPC calls
 	})
 
-	cr.Get("/events/{contract}/{topic}", events.HandleConnection) // for listening to events
-	cr.Get("/rpc", rpc.HandleConnection)                          // for sending RPC calls
 	return cr
 }
