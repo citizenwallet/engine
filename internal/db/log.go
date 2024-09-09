@@ -20,8 +20,9 @@ type LogDB struct {
 }
 
 // NewLogDB creates a new DB
-func NewLogDB(db, rdb *pgxpool.Pool, name string) (*LogDB, error) {
+func NewLogDB(ctx context.Context, db, rdb *pgxpool.Pool, name string) (*LogDB, error) {
 	txdb := &LogDB{
+		ctx:    ctx,
 		suffix: name,
 		db:     db,
 		rdb:    rdb,
@@ -30,7 +31,7 @@ func NewLogDB(db, rdb *pgxpool.Pool, name string) (*LogDB, error) {
 	return txdb, nil
 }
 
-// createLogTable creates a table to store logs in the given db
+// createLogTable creates a table dest store logs in the given db
 func (db *LogDB) CreateLogTable() error {
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS t_logs_%s(
@@ -39,7 +40,7 @@ func (db *LogDB) CreateLogTable() error {
 		created_at timestamp NOT NULL DEFAULT current_timestamp,
 		updated_at timestamp NOT NULL DEFAULT current_timestamp,
 		nonce integer NOT NULL,
-		to text NOT NULL,
+		dest text NOT NULL,
 		value text NOT NULL,
 		data jsonb DEFAULT NULL,
 		extra_data jsonb DEFAULT NULL,
@@ -63,7 +64,7 @@ func (db *LogDB) CreateLogTableIndexes() error {
 
 	// filtering on contract address
 	_, err = db.db.Exec(db.ctx, fmt.Sprintf(`
-	CREATE INDEX IF NOT EXISTS idx_logs_%s_to ON t_logs_%s (to);
+	CREATE INDEX IF NOT EXISTS idx_logs_%s_dest ON t_logs_%s (dest);
 	`, suffix, db.suffix))
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func (db *LogDB) CreateLogTableIndexes() error {
 
 	// filtering on event topic for a given contract
 	_, err = db.db.Exec(db.ctx, fmt.Sprintf(`
-	CREATE INDEX IF NOT EXISTS idx_logs_%s_to_date ON t_logs_%s (to, created_at);
+	CREATE INDEX IF NOT EXISTS idx_logs_%s_dest_date ON t_logs_%s (dest, created_at);
 	`, suffix, db.suffix))
 	if err != nil {
 		return err
@@ -79,7 +80,7 @@ func (db *LogDB) CreateLogTableIndexes() error {
 
 	// filtering on event topic for a given contract for a range of dates
 	_, err = db.db.Exec(db.ctx, fmt.Sprintf(`
-	CREATE INDEX IF NOT EXISTS idx_logs_%s_to_topic_date ON t_logs_%s (to, (data->>'topic'), created_at);
+	CREATE INDEX IF NOT EXISTS idx_logs_%s_dest_topic_date ON t_logs_%s (dest, (data->>'topic'), created_at);
 	`, suffix, db.suffix))
 	if err != nil {
 		return err
@@ -134,12 +135,12 @@ func (db *LogDB) CreateLogTableIndexes() error {
 	return nil
 }
 
-// AddLog adds a log to the db
+// AddLog adds a log dest the db
 func (db *LogDB) AddLog(lg *engine.Log) error {
 
 	// insert log on conflict do nothing
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-	INSERT INTO t_logs_%s (hash, tx_hash, nonce, to, value, data, extra_data, status, created_at, updated_at)
+	INSERT INTO t_logs_%s (hash, tx_hash, nonce, dest, value, data, extra_data, status, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	ON CONFLICT (hash) DO NOTHING
 	`, db.suffix), lg.Hash, lg.TxHash, lg.Nonce, lg.To, lg.Value.String(), lg.Data, lg.ExtraData, lg.Status, lg.CreatedAt, lg.UpdatedAt)
@@ -147,26 +148,24 @@ func (db *LogDB) AddLog(lg *engine.Log) error {
 	return err
 }
 
-// AddLogs adds a list of logs to the db
+// AddLogs adds a list of logs dest the db
 func (db *LogDB) AddLogs(lg []*engine.Log) error {
 
 	for _, t := range lg {
 		_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-			INSERT INTO t_logs_%s (hash, tx_hash, nonce, to, value, data, extra_data, status, created_at, updated_at)
+			INSERT INTO t_logs_%s (hash, tx_hash, nonce, dest, value, data, extra_data, status, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (hash) DO UPDATE SET
 				tx_hash = EXCLUDED.tx_hash,
-				token_id = EXCLUDED.token_id,
-				created_at = EXCLUDED.created_at,
-				from_to_addr = EXCLUDED.from_to_addr,
-				from_addr = EXCLUDED.from_addr,
-				to_addr = EXCLUDED.to_addr,
 				nonce = EXCLUDED.nonce,
+				dest = EXCLUDED.dest,
 				value = EXCLUDED.value,
 				data = COALESCE(EXCLUDED.data, t_logs_%s.data),
 				extra_data = COALESCE(EXCLUDED.extra_data, t_logs_%s.extra_data),
-				status = EXCLUDED.status
-			`, db.suffix, db.suffix), t.Hash, t.TxHash, t.CreatedAt, t.Nonce, t.To, t.Value.String(), t.Data, t.ExtraData, t.Status)
+				status = EXCLUDED.status,
+				created_at = EXCLUDED.created_at,
+				updated_at = EXCLUDED.updated_at
+			`, db.suffix, db.suffix, db.suffix), t.Hash, t.TxHash, t.Nonce, t.To, t.Value.String(), t.Data, t.ExtraData, t.Status, t.CreatedAt, t.UpdatedAt)
 		if err != nil {
 			return err
 		}
@@ -175,7 +174,7 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 	return nil
 }
 
-// SetStatus sets the status of a log to pending
+// SetStatus sets the status of a log dest pending
 func (db *LogDB) SetStatus(status, hash string) error {
 	// if status is success, don't update
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
@@ -211,7 +210,7 @@ func (db *LogDB) GetLog(hash string) (*engine.Log, error) {
 	var value string
 
 	row := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, to, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s
 		WHERE hash = $1
 		`, db.suffix), hash)
@@ -232,9 +231,9 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-	SELECT hash, tx_hash, created_at, updated_at, nonce, to, value, data, extra_data, status
+	SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
 	FROM t_logs_%s
-	WHERE to = $1 AND data->>'topic' = $2 AND created_at <= $3
+	WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
 	`, db.suffix)
 
 	args := []any{contract, signature, maxDate}
@@ -294,9 +293,9 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, to, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s
-		WHERE to = $1 AND created_at <= $2
+		WHERE dest = $1 AND created_at <= $2
 		`, db.suffix)
 
 	args := []any{contract, maxDate}
@@ -317,7 +316,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				WHERE to = $%d AND created_at <= $%d
+				WHERE dest = $%d AND created_at <= $%d
 				`, len(args)+1, len(args)+2)
 
 			args = append(args, contract, maxDate)
@@ -373,9 +372,9 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, to, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s
-		WHERE to = $1 AND data->>'topic' = $2 AND created_at >= $3
+		WHERE dest = $1 AND data->>'topic' = $2 AND created_at >= $3
 		`, db.suffix)
 
 	args := []any{contract, signature, fromDate}
@@ -435,9 +434,9 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, to, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s
-		WHERE to = $1 AND created_at >= $2
+		WHERE dest = $1 AND created_at >= $2
 		`, db.suffix)
 
 	args := []any{contract, fromDate}
@@ -457,7 +456,7 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				WHERE to = $%d AND created_at >= $%d
+				WHERE dest = $%d AND created_at >= $%d
 				`, len(args)+1, len(args)+2)
 
 			args = append(args, contract, fromDate)
@@ -514,7 +513,7 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 		return txs, nil
 	}
 
-	// Convert the log hashes to a comma-separated string
+	// Convert the log hashes dest a comma-separated string
 	hashStr := ""
 	for _, lg := range txs {
 		// if last item, don't add a trailing comma
@@ -531,7 +530,7 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 			VALUES
 			%s
 		)
-		SELECT lg.hash, tx_hash, created_at, nonce, to, value, data, extra_data, status
+		SELECT lg.hash, tx_hash, created_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s lg
 		JOIN b 
 		ON lg.hash = b.hash;

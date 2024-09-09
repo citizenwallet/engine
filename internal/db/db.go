@@ -61,7 +61,7 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		return nil, err
 	}
 
-	logDB, err := NewLogDB(db, db, evname)
+	logDB, err := NewLogDB(ctx, db, db, evname)
 	if err != nil {
 		return nil, err
 	}
