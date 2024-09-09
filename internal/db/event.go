@@ -33,16 +33,11 @@ func (db *EventDB) CreateEventsTable(suffix string) error {
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
 	CREATE TABLE IF NOT EXISTS t_events_%s(
 		contract text NOT NULL,
-		state text NOT NULL,
+		event_signature text NOT NULL,
+		name text NOT NULL,
 		created_at timestamp NOT NULL DEFAULT current_timestamp,
 		updated_at timestamp NOT NULL DEFAULT current_timestamp,
-		start_block integer NOT NULL,
-		last_block integer NOT NULL,
-		standard text NOT NULL,
-		name text NOT NULL,
-		symbol text NOT NULL,
-		decimals integer NOT NULL DEFAULT 6,
-		UNIQUE (contract, standard)
+		UNIQUE (contract, event_signature)
 	);
 	`, suffix))
 
@@ -75,14 +70,14 @@ func (db *EventDB) CreateEventsTableIndexes(suffix string) error {
 	return nil
 }
 
-// GetEvent gets an event from the db by contract and standard
-func (db *EventDB) GetEvent(contract string, standard engine.Standard) (*engine.Event, error) {
+// GetEvent gets an event from the db by contract and signature
+func (db *EventDB) GetEvent(contract string, signature string) (*engine.Event, error) {
 	var event engine.Event
 	err := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
-	SELECT contract, state, created_at, updated_at, start_block, last_block, standard, name, symbol, decimals
+	SELECT contract, event_signature, name, created_at, updated_at
 	FROM t_events_%s
-	WHERE contract = $1 AND standard = $2
-	`, db.suffix), contract, standard).Scan(&event.Contract, &event.State, &event.CreatedAt, &event.UpdatedAt, &event.StartBlock, &event.LastBlock, &event.Standard, &event.Name, &event.Symbol, &event.Decimals)
+	WHERE contract = $1 AND event_signature = $2
+	`, db.suffix), contract, signature).Scan(&event.Contract, &event.EventSignature, &event.Name, &event.CreatedAt, &event.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +88,7 @@ func (db *EventDB) GetEvent(contract string, standard engine.Standard) (*engine.
 // GetEvents gets all events from the db
 func (db *EventDB) GetEvents() ([]*engine.Event, error) {
 	rows, err := db.rdb.Query(db.ctx, fmt.Sprintf(`
-    SELECT contract, state, created_at, updated_at, start_block, last_block, standard, name, symbol, decimals
+    SELECT contract, event_signature, name, created_at, updated_at
     FROM t_events_%s
     ORDER BY created_at ASC
     `, db.suffix))
@@ -105,7 +100,7 @@ func (db *EventDB) GetEvents() ([]*engine.Event, error) {
 	events := []*engine.Event{}
 	for rows.Next() {
 		var event engine.Event
-		err = rows.Scan(&event.Contract, &event.State, &event.CreatedAt, &event.UpdatedAt, &event.StartBlock, &event.LastBlock, &event.Standard, &event.Name, &event.Symbol, &event.Decimals)
+		err = rows.Scan(&event.Contract, &event.EventSignature, &event.Name, &event.CreatedAt, &event.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -119,7 +114,7 @@ func (db *EventDB) GetEvents() ([]*engine.Event, error) {
 // GetOutdatedEvents gets all queued events from the db sorted by created_at
 func (db *EventDB) GetOutdatedEvents(currentBlk int64) ([]*engine.Event, error) {
 	rows, err := db.rdb.Query(db.ctx, fmt.Sprintf(`
-    SELECT contract, state, created_at, updated_at, start_block, last_block, standard, name, symbol, decimals
+    SELECT contract, event_signature, name, created_at, updated_at
     FROM t_events_%s
     WHERE last_block < $1
     ORDER BY created_at ASC
@@ -132,7 +127,7 @@ func (db *EventDB) GetOutdatedEvents(currentBlk int64) ([]*engine.Event, error) 
 	events := []*engine.Event{}
 	for rows.Next() {
 		var event engine.Event
-		err = rows.Scan(&event.Contract, &event.State, &event.CreatedAt, &event.UpdatedAt, &event.StartBlock, &event.LastBlock, &event.Standard, &event.Name, &event.Symbol, &event.Decimals)
+		err = rows.Scan(&event.Contract, &event.EventSignature, &event.Name, &event.CreatedAt, &event.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -141,74 +136,31 @@ func (db *EventDB) GetOutdatedEvents(currentBlk int64) ([]*engine.Event, error) 
 	}
 
 	return events, nil
-}
-
-// GetQueuedEvents gets all queued events from the db sorted by created_at
-func (db *EventDB) GetQueuedEvents() ([]*engine.Event, error) {
-	rows, err := db.rdb.Query(db.ctx, fmt.Sprintf(`
-    SELECT contract, state, created_at, updated_at, start_block, last_block, standard, name, symbol, decimals
-    FROM t_events_%s
-    WHERE state = $1
-    ORDER BY created_at ASC
-    `, db.suffix), engine.EventStateQueued)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	events := []*engine.Event{}
-	for rows.Next() {
-		var event engine.Event
-		err = rows.Scan(&event.Contract, &event.State, &event.CreatedAt, &event.UpdatedAt, &event.StartBlock, &event.LastBlock, &event.Standard, &event.Name, &event.Symbol, &event.Decimals)
-		if err != nil {
-			return nil, err
-		}
-
-		events = append(events, &event)
-	}
-
-	return events, nil
-}
-
-// SetEventState sets the state of an event
-func (db *EventDB) SetEventState(contract string, standard engine.Standard, state engine.EventState) error {
-	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-    UPDATE t_events_%s
-    SET state = $1, updated_at = $2
-    WHERE contract = $3 AND standard = $4
-    `, db.suffix), state, time.Now().UTC(), contract, standard)
-
-	return err
 }
 
 // SetEventLastBlock sets the last block of an event
-func (db *EventDB) SetEventLastBlock(contract string, standard engine.Standard, lastBlock int64) error {
+func (db *EventDB) SetEventLastBlock(contract string, signature string, lastBlock int64) error {
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
     UPDATE t_events_%s
     SET last_block = $1, updated_at = $2
-    WHERE contract = $3 AND standard = $4
-    `, db.suffix), lastBlock, time.Now().UTC(), contract, standard)
+    WHERE contract = $3 AND event_signature = $4
+    `, db.suffix), lastBlock, time.Now().UTC(), contract, signature)
 
 	return err
 }
 
 // AddEvent adds an event to the db
-func (db *EventDB) AddEvent(contract string, state engine.EventState, startBlk, lastBlk int64, std engine.Standard, name, symbol string, decimals int64) error {
+func (db *EventDB) AddEvent(contract string, signature string, name string) error {
 	t := time.Now().UTC()
 
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-    INSERT INTO t_events_%s (contract, state, created_at, updated_at, start_block, last_block, standard, name, symbol, decimals)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    ON CONFLICT (contract, standard)
+    INSERT INTO t_events_%s (contract, event_signature, name, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (contract, event_signature)
     DO UPDATE SET
-        state = EXCLUDED.state,
-        updated_at = EXCLUDED.updated_at,
-        start_block = EXCLUDED.start_block,
-        last_block = EXCLUDED.last_block,
         name = EXCLUDED.name,
-        symbol = EXCLUDED.symbol,
-        decimals = EXCLUDED.decimals
-    `, db.suffix), contract, state, t, t, startBlk, lastBlk, std, name, symbol, decimals)
+        updated_at = EXCLUDED.updated_at
+    `, db.suffix), contract, signature, name, t, t)
 	if err != nil {
 		return err
 	}
