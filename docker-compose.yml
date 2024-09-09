@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  db:
+    container_name: db
+    build:
+      context: .
+      dockerfile: ./.docker/db/Dockerfile
+    environment:
+      POSTGRES_PASSWORD: engine-pass-local
+      POSTGRES_USER: engine
+      POSTGRES_DB: engine
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    networks:
+      cwnet:
+        aliases:
+          - engine-db
+    ports:
+      - "5432:5432"
+    restart: on-failure
+    healthcheck:
+      test: "exit 0"
+  engine:
+    container_name: engine
+    build:
+      context: .
+      dockerfile: ./.docker/engine/Dockerfile
+    networks:
+      cwnet:
+        aliases:
+          - engine
+    ports:
+      - "3001:3001"
+    restart: on-failure
+    healthcheck:
+      test: "exit 0"
+
+
+networks:
+  cwnet:
+    name: cwnet
