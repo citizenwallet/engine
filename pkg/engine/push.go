@@ -33,7 +33,7 @@ const PushMessageAnonymousBody = "%s %s received"
 const PushMessageTitle = "%s - %s"
 const PushMessageBody = "%s %s received from %s"
 
-func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol string, tx *Transfer) *PushMessage {
+func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol string, tx *Log) *PushMessage {
 	mtx, err := json.Marshal(tx)
 	if err != nil {
 		mtx = nil
@@ -44,21 +44,21 @@ func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol strin
 	title := ""
 	description := ""
 	switch tx.Status {
-	case TransferStatusSending:
+	case LogStatusSending:
 		title = fmt.Sprintf(PushMessageSendingAnonymousTitle, community)
 		description = fmt.Sprintf(PushMessageSendingAnonymousBody, amount, symbol)
 		if tx.Data != nil {
 			title = fmt.Sprintf(PushMessageSendingAnonymousDescriptionTitle, amount, community, symbol)
-			description = fmt.Sprintf(PushMessageSendingAnonymousDescriptionBody, tx.Data.Description)
+			description = fmt.Sprintf(PushMessageSendingAnonymousDescriptionBody, string(tx.ExtraData))
 		}
-	case TransferStatusPending:
+	case LogStatusPending:
 		silent = true
-	case TransferStatusSuccess:
+	case LogStatusSuccess:
 		title = fmt.Sprintf(PushMessageAnonymousTitle, community)
 		description = fmt.Sprintf(PushMessageAnonymousBody, amount, symbol)
 		if tx.Data != nil {
 			title = fmt.Sprintf(PushMessageAnonymousDescriptionTitle, amount, community, symbol)
-			description = fmt.Sprintf(PushMessageAnonymousDescriptionBody, tx.Data.Description)
+			description = fmt.Sprintf(PushMessageAnonymousDescriptionBody, string(tx.ExtraData))
 		}
 	}
 
@@ -71,7 +71,7 @@ func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol strin
 	}
 }
 
-func NewSilentPushMessage(token []*PushToken, tx *Transfer) *PushMessage {
+func NewSilentPushMessage(token []*PushToken, tx *Log) *PushMessage {
 	mtx, err := json.Marshal(tx)
 	if err != nil {
 		mtx = nil

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -77,7 +78,7 @@ func newMessage(id string, message any, response *chan MessageResponse) *Message
 	}
 }
 
-func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, txdata *TransferData) *Message {
+func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, txdata json.RawMessage) *Message {
 	op := UserOpMessage{
 		Paymaster:  pm,
 		EntryPoint: entrypoint,

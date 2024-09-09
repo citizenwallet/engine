@@ -30,7 +30,7 @@ type DB struct {
 
 	EventDB     *EventDB
 	SponsorDB   *SponsorDB
-	TransferDB  map[string]*TransferDB
+	LogDB       *LogDB
 	PushTokenDB map[string]*PushTokenDB
 }
 
@@ -61,6 +61,11 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		return nil, err
 	}
 
+	logDB, err := NewLogDB(db, db, evname)
+	if err != nil {
+		return nil, err
+	}
+
 	d := &DB{
 		ctx:       ctx,
 		chainID:   chainID,
@@ -68,6 +73,7 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		rdb:       db,
 		EventDB:   eventDB,
 		SponsorDB: sponsorDB,
+		LogDB:     logDB,
 	}
 
 	// check if db exists before opening, since we use rwc mode
@@ -110,7 +116,28 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		}
 	}
 
-	txdb := map[string]*TransferDB{}
+	log.Default().Println("creating transfer db for: ", evname)
+
+	// check if db exists before opening, since we use rwc mode
+	exists, err = d.LogTableExists(evname)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		// create table
+		err = d.LogDB.CreateLogTable()
+		if err != nil {
+			return nil, err
+		}
+
+		// create indexes
+		err = d.LogDB.CreateLogTableIndexes()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	ptdb := map[string]*PushTokenDB{}
 
 	evs, err := eventDB.GetEvents()
@@ -122,33 +149,6 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		name, err := d.TableNameSuffix(ev.Contract)
 		if err != nil {
 			return nil, err
-		}
-
-		log.Default().Println("creating transfer db for: ", name)
-
-		txdb[name], err = NewTransferDB(db, db, name)
-		if err != nil {
-			return nil, err
-		}
-
-		// check if db exists before opening, since we use rwc mode
-		exists, err := d.TransferTableExists(name)
-		if err != nil {
-			return nil, err
-		}
-
-		if !exists {
-			// create table
-			err = txdb[name].CreateTransferTable()
-			if err != nil {
-				return nil, err
-			}
-
-			// create indexes
-			err = txdb[name].CreateTransferTableIndexes()
-			if err != nil {
-				return nil, err
-			}
 		}
 
 		log.Default().Println("creating push token db for: ", name)
@@ -179,7 +179,6 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost str
 		}
 	}
 
-	d.TransferDB = txdb
 	d.PushTokenDB = ptdb
 
 	return d, nil
@@ -209,8 +208,8 @@ func (db *DB) SponsorTableExists(suffix string) (bool, error) {
 	return exists, nil
 }
 
-// TransferTableExists checks if a table exists in the database
-func (db *DB) TransferTableExists(suffix string) (bool, error) {
+// LogTableExists checks if a table exists in the database
+func (db *DB) LogTableExists(suffix string) (bool, error) {
 	tableName := fmt.Sprintf("t_transfers_%s", suffix)
 	var exists bool
 	err := db.rdb.QueryRow(db.ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", tableName).Scan(&exists)
@@ -246,22 +245,6 @@ func (d *DB) TableNameSuffix(contract string) (string, error) {
 	return suffix, nil
 }
 
-// GetTransferDB returns true if the transfer db for the given contract exists, returns the db if it exists
-func (d *DB) GetTransferDB(contract string) (*TransferDB, bool) {
-	name, err := d.TableNameSuffix(contract)
-	if err != nil {
-		return nil, false
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	txdb, ok := d.TransferDB[name]
-	if !ok {
-		return nil, false
-	}
-	return txdb, true
-}
-
 // GetPushTokenDB returns true if the push token db for the given contract exists, returns the db if it exists
 func (d *DB) GetPushTokenDB(contract string) (*PushTokenDB, bool) {
 	name, err := d.TableNameSuffix(contract)
@@ -276,26 +259,6 @@ func (d *DB) GetPushTokenDB(contract string) (*PushTokenDB, bool) {
 		return nil, false
 	}
 	return ptdb, true
-}
-
-// AddTransferDB adds a new transfer db for the given contract
-func (d *DB) AddTransferDB(contract string) (*TransferDB, error) {
-	name, err := d.TableNameSuffix(contract)
-	if err != nil {
-		return nil, err
-	}
-
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if txdb, ok := d.TransferDB[name]; ok {
-		return txdb, nil
-	}
-	txdb, err := NewTransferDB(d.db, d.rdb, name)
-	if err != nil {
-		return nil, err
-	}
-	d.TransferDB[name] = txdb
-	return txdb, nil
 }
 
 // AddPushTokenDB adds a new push token db for the given contract
@@ -321,9 +284,6 @@ func (d *DB) AddPushTokenDB(contract string) (*PushTokenDB, error) {
 func (d *DB) Close() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for i := range d.TransferDB {
-		delete(d.TransferDB, i)
-	}
 
 	for i := range d.PushTokenDB {
 		delete(d.PushTokenDB, i)
