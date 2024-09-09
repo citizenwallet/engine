@@ -3,17 +3,23 @@ package api
 import (
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 
+	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ws"
+	"github.com/citizenwallet/engine/pkg/engine"
 )
 
 type Server struct {
-	pools map[string]*ws.ConnectionPool
+	chainID *big.Int
+	db      *db.DB
+	evm     engine.EVMRequester
+	pools   map[string]*ws.ConnectionPool
 }
 
-func NewServer(pools map[string]*ws.ConnectionPool) *Server {
-	return &Server{pools: pools}
+func NewServer(chainID *big.Int, db *db.DB, evm engine.EVMRequester, pools map[string]*ws.ConnectionPool) *Server {
+	return &Server{chainID: chainID, db: db, evm: evm, pools: pools}
 }
 
 func (s *Server) Start(port int, handler http.Handler) error {

@@ -4,11 +4,11 @@ import (
 	"context"
 	"flag"
 	"log"
-	"math/big"
 
 	"github.com/citizenwallet/engine/internal/api"
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/db"
+	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/internal/ws"
 )
 
@@ -28,11 +28,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// chid, err := evm.ChainID()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	chid := big.NewInt(1337)
+	evm, err := ethrequest.NewEthService(ctx, conf.RPCURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	chid, err := evm.ChainID()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	log.Default().Println("node running for chain: ", chid.String())
 
@@ -49,7 +53,7 @@ func main() {
 	pools["0x123:0x456"] = ws.NewConnectionPool("0x123:0x456")
 	go pools["0x123:0x456"].Run()
 
-	s := api.NewServer(pools)
+	s := api.NewServer(chid, d, evm, pools)
 
 	wsr := s.CreateRoutes()
 
