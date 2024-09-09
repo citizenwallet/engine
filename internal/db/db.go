@@ -35,17 +35,11 @@ type DB struct {
 }
 
 // NewDB instantiates a new DB
-func NewDB(chainID *big.Int, basePath, secret, username, password, dbname, host, rhost string) (*DB, error) {
+func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost string) (*DB, error) {
 	ctx := context.Background()
 
 	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=5432 sslmode=disable", username, password, dbname, host)
 	db, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	rconnStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=5432 sslmode=disable", username, password, dbname, rhost)
-	rdb, err := pgxpool.New(ctx, rconnStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -55,27 +49,23 @@ func NewDB(chainID *big.Int, basePath, secret, username, password, dbname, host,
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	err = rdb.Ping(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
 	evname := chainID.String()
 
-	eventDB, err := NewEventDB(ctx, db, rdb, evname)
+	eventDB, err := NewEventDB(ctx, db, db, evname)
 	if err != nil {
 		return nil, err
 	}
 
-	sponsorDB, err := NewSponsorDB(ctx, db, rdb, evname, secret)
+	sponsorDB, err := NewSponsorDB(ctx, db, db, evname, secret)
 	if err != nil {
 		return nil, err
 	}
 
 	d := &DB{
+		ctx:       ctx,
 		chainID:   chainID,
 		db:        db,
-		rdb:       rdb,
+		rdb:       db,
 		EventDB:   eventDB,
 		SponsorDB: sponsorDB,
 	}
@@ -136,7 +126,7 @@ func NewDB(chainID *big.Int, basePath, secret, username, password, dbname, host,
 
 		log.Default().Println("creating transfer db for: ", name)
 
-		txdb[name], err = NewTransferDB(db, rdb, name)
+		txdb[name], err = NewTransferDB(db, db, name)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +153,7 @@ func NewDB(chainID *big.Int, basePath, secret, username, password, dbname, host,
 
 		log.Default().Println("creating push token db for: ", name)
 
-		ptdb[name], err = NewPushTokenDB(ctx, db, rdb, name)
+		ptdb[name], err = NewPushTokenDB(ctx, db, db, name)
 		if err != nil {
 			return nil, err
 		}

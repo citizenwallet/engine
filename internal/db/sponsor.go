@@ -2,8 +2,6 @@ package db
 
 import (
 	"context"
-	"encoding/base64"
-	"errors"
 	"fmt"
 
 	"github.com/citizenwallet/engine/pkg/common"
@@ -14,23 +12,18 @@ import (
 type SponsorDB struct {
 	ctx    context.Context
 	suffix string
-	secret []byte
+	secret string
 	db     *pgxpool.Pool
 	rdb    *pgxpool.Pool
 }
 
 // NewSponsorDB creates a new DB
 func NewSponsorDB(ctx context.Context, db, rdb *pgxpool.Pool, name, secret string) (*SponsorDB, error) {
-	// parse base64 secret
-	s, err := base64.StdEncoding.DecodeString(secret)
-	if err != nil {
-		return nil, errors.New("failed to decode secret")
-	}
 
 	sdb := &SponsorDB{
 		ctx:    ctx,
 		suffix: name,
-		secret: s,
+		secret: secret,
 		db:     db,
 		rdb:    rdb,
 	}

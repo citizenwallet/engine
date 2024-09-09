@@ -16,3 +16,6 @@
 
 # postgres data
 data/
+
+# env
+.env
