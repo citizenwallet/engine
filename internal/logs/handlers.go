@@ -51,7 +51,7 @@ func (s *Service) GetSingle(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 	// parse contract address from url params
-	contractAddr := chi.URLParam(r, "token_address")
+	contractAddr := chi.URLParam(r, "contract_address")
 	if contractAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -105,7 +105,7 @@ func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 	// parse contract address from url params
-	contractAddr := chi.URLParam(r, "token_address")
+	contractAddr := chi.URLParam(r, "contract_address")
 	if contractAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -164,16 +164,16 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 //		@Tags			logs
 //		@Accept			json
 //		@Produce		json
-//		@Param			token_address	path		string	true	"Token Contract Address"
+//		@Param			contract_address	path		string	true	"Token Contract Address"
 //	 	@Param			acc_address	path		string	true	"Address of the account"
 //		@Success		200	{object}	common.Response
 //		@Failure		400
 //		@Failure		404
 //		@Failure		500
-//		@Router			/logs/transfers/{token_address}/{acc_addr} [get]
+//		@Router			/logs/transfers/{contract_address}/{acc_addr} [get]
 func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 	// parse contract address from url params
-	contractAddr := chi.URLParam(r, "token_address")
+	contractAddr := chi.URLParam(r, "contract_address")
 	if contractAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -227,7 +227,7 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) GetNew(w http.ResponseWriter, r *http.Request) {
 	// parse contract address from url params
-	contractAddr := chi.URLParam(r, "token_address")
+	contractAddr := chi.URLParam(r, "contract_address")
 	if contractAddr == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return

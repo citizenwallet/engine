@@ -39,18 +39,16 @@ func (s *Server) CreateRoutes() *chi.Mux {
 	})
 
 	cr.Route("/v1", func(cr chi.Router) {
-		cr.Route("/logs/transfers", func(cr chi.Router) {
-			cr.Route("/{token_address}", func(cr chi.Router) {
-				cr.Route("/{signature}", func(cr chi.Router) {
-					cr.Get("/", l.Get)
-					cr.Get("/all", l.GetAll)
+		cr.Route("/logs/transfers/{contract_address}", func(cr chi.Router) {
+			cr.Route("/{signature}", func(cr chi.Router) {
+				cr.Get("/", l.Get)
+				cr.Get("/all", l.GetAll)
 
-					cr.Get("/new", l.GetNew)
-					cr.Get("/new/all", l.GetAllNew)
-				})
-
-				cr.Get("/tx/{hash}", l.GetSingle)
+				cr.Get("/new", l.GetNew)
+				cr.Get("/new/all", l.GetAllNew)
 			})
+
+			cr.Get("/tx/{hash}", l.GetSingle)
 		})
 
 		cr.Get("/events/{contract}/{topic}", events.HandleConnection) // for listening to events
