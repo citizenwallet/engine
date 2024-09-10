@@ -13,6 +13,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
+func (s *Server) CreateBaseRouter() *chi.Mux {
+	cr := chi.NewRouter()
+
+	return cr
+}
+
 func (s *Server) AddMiddleware(cr *chi.Mux) *chi.Mux {
 
 	// configure middleware
@@ -28,9 +34,7 @@ func (s *Server) AddMiddleware(cr *chi.Mux) *chi.Mux {
 	return cr
 }
 
-func (s *Server) CreateRoutes() *chi.Mux {
-	cr := chi.NewRouter()
-
+func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 	// instantiate handlers
 	v := version.NewService()
 	l := logs.NewService(s.chainID, s.db, s.evm)
@@ -48,7 +52,7 @@ func (s *Server) CreateRoutes() *chi.Mux {
 	cr.Route("/v1", func(cr chi.Router) {
 
 		// logs
-		cr.Route("/logs/transfers/{contract_address}", func(cr chi.Router) {
+		cr.Route("/logs/{contract_address}", func(cr chi.Router) {
 			cr.Route("/{signature}", func(cr chi.Router) {
 				cr.Get("/", l.Get)
 				cr.Get("/all", l.GetAll)
