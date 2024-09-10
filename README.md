@@ -31,10 +31,10 @@ Engine addresses several key challenges in blockchain development:
   - [ ] WebSocket
     - [ ] Listen by Contract + Event Signature + Topic name/value (optional)
   - [ ] Indexing
-    - [ ] Listen by Contract + Event Signature
-    - [ ] Mechanism to automate requests to start indexing
-      - [ ] Manually for system admins
-      - [ ] By listening to a Smart Contract (people could pay to start indexing)
+    - [x] Listen by Contract + Event Signature
+  - [ ] Mechanism to automate requests to start indexing
+    - [ ] Manually for system admins
+    - [ ] By listening to a Smart Contract (people could pay to start indexing)
   - [x] Store in DB
     - [x] Hash
     - [x] Created at
