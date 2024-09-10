@@ -1,4 +1,4 @@
-# App Engine
+# dApp Engine
 
 App Engine is a Go application designed to simplify and enhance blockchain interactions on EVM-compatible chains. It aims to create great user experiences on EVM-compatible blockchains by providing a unified solution for reading and writing data, as well as handling event-based interactions.
 
