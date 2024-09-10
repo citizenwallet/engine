@@ -35,9 +35,11 @@ Engine addresses several key challenges in blockchain development:
   - [ ] Mechanism to automate requests to start indexing
     - [ ] Manually for system admins
     - [ ] By listening to a Smart Contract (people could pay to start indexing)
+  - [x] Allow attaching extra data to a log
   - [x] Store in DB
     - [x] Hash
     - [x] Created at
+    - [ ] Sender (used to determine if modifying extra data is allowed)
     - [x] Destination Contract Address
     - [x] Amount
     - [x] Status
