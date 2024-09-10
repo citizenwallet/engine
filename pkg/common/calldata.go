@@ -17,11 +17,40 @@ var (
 	ErrInvalidCalldata = errors.New("invalid calldata")
 	ErrNotTransfer     = errors.New("not a transfer")
 
-	executeSigSingle = crypto.Keccak256([]byte("execute(address,uint256,bytes)"))[:4]
-
 	transferSig = crypto.Keccak256([]byte("transfer(address,uint256)"))[:4]
 	withdrawSig = crypto.Keccak256([]byte("withdraw(bytes32,address,address,uint256)"))[:4]
 )
+
+func ParseDestinationFromCallData(calldata []byte) (common.Address, error) {
+	if len(calldata) < 228 {
+		return common.Address{}, ErrInvalidCalldata
+	}
+
+	dest := common.Address{}
+
+	// The function selector is the first 4 bytes of the calldata
+	funcSelector := calldata[:4]
+	// The rest of the calldata is the encoded arguments
+	args := calldata[4:]
+
+	switch string(funcSelector) {
+	case string(engine.FuncSigSafeExecFromModule):
+		dest = common.BytesToAddress(args[32-20 : 32])
+	case string(engine.FuncSigSingle):
+		dest = common.BytesToAddress(args[32-20 : 32])
+	case string(engine.FuncSigBatch):
+		return common.Address{}, ErrInvalidCalldata // TODO: implement batch execute
+	default:
+		return common.Address{}, ErrInvalidCalldata
+	}
+
+	// The first argument is the dest address, which is 32 bytes offset from the start of the args
+	if len(dest.Bytes()) == 0 {
+		return common.Address{}, ErrInvalidCalldata
+	}
+
+	return dest, nil
+}
 
 // ParseERC20Transfer parses the calldata of an ERC20 transfer from a smart contract Execute function
 func ParseERC20Transfer(calldata []byte, evm engine.EVMRequester) (common.Address, common.Address, common.Address, *big.Int, error) {
@@ -31,7 +60,7 @@ func ParseERC20Transfer(calldata []byte, evm engine.EVMRequester) (common.Addres
 
 	// The function selector is the first 4 bytes of the calldata
 	funcSelector := calldata[:4]
-	if !bytes.Equal(funcSelector, executeSigSingle) { // TODO: implement batch execute
+	if !bytes.Equal(funcSelector, engine.FuncSigSingle) { // TODO: implement batch execute
 		return common.Address{}, common.Address{}, common.Address{}, nil, ErrInvalidCalldata
 	}
 

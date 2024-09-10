@@ -9,11 +9,13 @@ import (
 )
 
 func TestLog_GenerateUniqueHash(t *testing.T) {
+	d := json.RawMessage(`{"method":"transfer"}`)
+
 	// Create a sample Log instance
 	log := &Log{
 		To:     "0x742d35Cc6634C0532925a3b844Bc454e4438f44e",
 		Value:  big.NewInt(1000000000000000000), // 1 ETH
-		Data:   json.RawMessage(`{"method":"transfer"}`),
+		Data:   &d,
 		TxHash: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 	}
 

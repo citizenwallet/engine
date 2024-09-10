@@ -18,6 +18,10 @@ type PushMessage struct {
 	Silent bool
 }
 
+type PushDescription struct {
+	Description string `json:"description"`
+}
+
 // sending
 const PushMessageSendingAnonymousDescriptionTitle = "Receiving %s %s (%s)..."
 const PushMessageSendingAnonymousDescriptionBody = "%s"
@@ -33,6 +37,16 @@ const PushMessageAnonymousBody = "%s %s received"
 const PushMessageTitle = "%s - %s"
 const PushMessageBody = "%s %s received from %s"
 
+func parseDescriptionFromData(data *json.RawMessage) *string {
+	var desc PushDescription
+	err := json.Unmarshal(*data, &desc)
+	if err != nil {
+		return nil
+	}
+
+	return &desc.Description
+}
+
 func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol string, tx *Log) *PushMessage {
 	mtx, err := json.Marshal(tx)
 	if err != nil {
@@ -47,18 +61,18 @@ func NewAnonymousPushMessage(token []*PushToken, community, amount, symbol strin
 	case LogStatusSending:
 		title = fmt.Sprintf(PushMessageSendingAnonymousTitle, community)
 		description = fmt.Sprintf(PushMessageSendingAnonymousBody, amount, symbol)
-		if tx.Data != nil {
+		if descriptionData := parseDescriptionFromData(tx.ExtraData); descriptionData != nil {
 			title = fmt.Sprintf(PushMessageSendingAnonymousDescriptionTitle, amount, community, symbol)
-			description = fmt.Sprintf(PushMessageSendingAnonymousDescriptionBody, string(tx.ExtraData))
+			description = fmt.Sprintf(PushMessageSendingAnonymousDescriptionBody, *descriptionData)
 		}
 	case LogStatusPending:
 		silent = true
 	case LogStatusSuccess:
 		title = fmt.Sprintf(PushMessageAnonymousTitle, community)
 		description = fmt.Sprintf(PushMessageAnonymousBody, amount, symbol)
-		if tx.Data != nil {
+		if descriptionData := parseDescriptionFromData(tx.ExtraData); descriptionData != nil {
 			title = fmt.Sprintf(PushMessageAnonymousDescriptionTitle, amount, community, symbol)
-			description = fmt.Sprintf(PushMessageAnonymousDescriptionBody, string(tx.ExtraData))
+			description = fmt.Sprintf(PushMessageAnonymousDescriptionBody, *descriptionData)
 		}
 	}
 

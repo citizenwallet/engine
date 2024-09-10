@@ -65,6 +65,7 @@ type UserOpMessage struct {
 	EntryPoint common.Address
 	ChainId    *big.Int
 	UserOp     UserOp
+	Data       any
 	ExtraData  any
 }
 
@@ -78,13 +79,14 @@ func newMessage(id string, message any, response *chan MessageResponse) *Message
 	}
 }
 
-func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, txdata json.RawMessage) *Message {
+func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, data, xdata *json.RawMessage) *Message {
 	op := UserOpMessage{
 		Paymaster:  pm,
 		EntryPoint: entrypoint,
 		ChainId:    chainId,
 		UserOp:     userop,
-		ExtraData:  txdata,
+		Data:       data,
+		ExtraData:  xdata,
 	}
 
 	respch := make(chan MessageResponse)

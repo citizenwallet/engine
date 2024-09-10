@@ -6,6 +6,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+)
+
+var (
+	// Allowed function signatures
+	FuncSigSingle             = crypto.Keccak256([]byte("execute(address,uint256,bytes)"))[:4]
+	FuncSigBatch              = crypto.Keccak256([]byte("executeBatch(address[],uint256[],bytes[])"))[:4]
+	FuncSigSafeExecFromModule = crypto.Keccak256([]byte("execTransactionFromModule(address,uint256,bytes,uint8)"))[:4]
 )
 
 type UserOp struct {

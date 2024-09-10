@@ -39,16 +39,16 @@ func LogStatusFromString(s string) (LogStatus, error) {
 }
 
 type Log struct {
-	Hash      string          `json:"hash"`
-	TxHash    string          `json:"tx_hash"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	Nonce     int64           `json:"nonce"`
-	To        string          `json:"to"`
-	Value     *big.Int        `json:"value"`
-	Data      json.RawMessage `json:"data"`
-	ExtraData json.RawMessage `json:"extra_data"`
-	Status    LogStatus       `json:"status"`
+	Hash      string           `json:"hash"`
+	TxHash    string           `json:"tx_hash"`
+	CreatedAt time.Time        `json:"created_at"`
+	UpdatedAt time.Time        `json:"updated_at"`
+	Nonce     int64            `json:"nonce"`
+	To        string           `json:"to"`
+	Value     *big.Int         `json:"value"`
+	Data      *json.RawMessage `json:"data"`
+	ExtraData *json.RawMessage `json:"extra_data"`
+	Status    LogStatus        `json:"status"`
 }
 
 // generate hash for transfer using a provided index, from, to and the tx hash
@@ -60,7 +60,10 @@ func (t *Log) GenerateUniqueHash() string {
 	// Convert t.Value to a fixed-length byte representation
 	valueBytes := t.Value.Bytes()
 	buf.Write(common.LeftPadBytes(valueBytes, 32))
-	buf.Write(t.Data)
+	if t.Data != nil {
+		buf.Write(*t.Data)
+	}
+
 	buf.Write(common.FromHex(t.TxHash))
 
 	hash := crypto.Keccak256Hash(buf.Bytes())
