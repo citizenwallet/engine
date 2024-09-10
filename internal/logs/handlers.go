@@ -58,7 +58,7 @@ func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse signature from url query
-	signature := r.URL.Query().Get("signature")
+	signature := chi.URLParam(r, "signature")
 	if signature == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -112,7 +112,7 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse signature from url query
-	signature := r.URL.Query().Get("signature")
+	signature := chi.URLParam(r, "signature")
 	if signature == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -180,7 +180,7 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse signature from url query
-	signature := r.URL.Query().Get("signature")
+	signature := chi.URLParam(r, "signature")
 	if signature == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -234,7 +234,7 @@ func (s *Service) GetNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// parse signature from url query
-	signature := r.URL.Query().Get("signature")
+	signature := chi.URLParam(r, "signature")
 	if signature == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return

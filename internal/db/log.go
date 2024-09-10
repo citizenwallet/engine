@@ -295,14 +295,14 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	query := fmt.Sprintf(`
 		SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
 		FROM t_logs_%s
-		WHERE dest = $1 AND created_at <= $2
+		WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
 		`, db.suffix)
 
-	args := []any{contract, maxDate}
+	args := []any{contract, signature, maxDate}
 
 	orderLimit := `
 		ORDER BY created_at DESC
-		LIMIT $3 OFFSET $4
+		LIMIT $4 OFFSET $5
 		`
 
 	if len(topics) > 0 {
@@ -316,10 +316,10 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				WHERE dest = $%d AND created_at <= $%d
-				`, len(args)+1, len(args)+2)
+				WHERE dest = $%d AND data->>'topic' = $%d AND created_at <= $%d
+				`, len(args)+1, len(args)+2, len(args)+3)
 
-			args = append(args, contract, maxDate)
+			args = append(args, contract, signature, maxDate)
 
 			topicQuery2, topicArgs2 := topics2.GenerateTopicQuery(len(args) + 1)
 
