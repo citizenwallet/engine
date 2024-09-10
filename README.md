@@ -14,18 +14,22 @@ Engine addresses several key challenges in blockchain development:
 
 ## Features
 
-- [ ] Endpoints
-  - [x] Fetch in a date range
-  - [x] Submit user operations against Paymaster Z
-- [ ] WebSocket
-  - [ ] Listen to Event X on Contract Y
-  - [ ] Submit user operations against Paymaster Z
-- [x] Bundler RPC Endpoints
-  - [x] pm_sponsorUserOperation
-  - [x] pm_ooSponsorUserOperation
-  - [x] eth_sendUserOperation
-  - [x] eth_chainId
+- [x] Bundler
+  - [x] RPC calls through REST Endpoints
+    - [x] pm_sponsorUserOperation
+    - [x] pm_ooSponsorUserOperation
+    - [x] eth_sendUserOperation
+    - [x] eth_chainId
+  - [ ] RPC calls through WebSocket
+    - [ ] pm_sponsorUserOperation
+    - [ ] pm_ooSponsorUserOperation
+    - [ ] eth_sendUserOperation
+    - [ ] eth_chainId
 - [ ] Smart Contract Logs
+  - [x] Endpoints
+    - [x] Fetch in a date range
+  - [ ] WebSocket
+    - [ ] Listen by Contract + Event Signature + Topic name/value (optional)
   - [ ] Indexing
     - [ ] Listen by Contract + Event Signature
     - [ ] Mechanism to automate requests to start indexing
@@ -39,7 +43,6 @@ Engine addresses several key challenges in blockchain development:
     - [x] Status
     - [x] Topics (as JSON)
     - [x] Extra Data (as JSON)
-  - [ ] Listen by Contract + Event Signature + Topic name/value (optional)
   - [ ] Webhooks (make a network request based on an event being triggered)
 
 ## About Citizen Wallet
