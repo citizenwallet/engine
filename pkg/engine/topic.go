@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -18,6 +20,84 @@ type Topic struct {
 }
 
 type Topics []Topic
+
+func ParseTopicsFromHashes(event *Event, topicHashes []common.Hash, data []byte) (Topics, error) {
+	if event == nil {
+		return nil, fmt.Errorf("event is required")
+	}
+
+	if len(topicHashes) == 0 {
+		return nil, fmt.Errorf("no topic hashes provided")
+	}
+
+	name, args, argTypes := event.ParseEventSignature()
+	if name == "" || len(args) == 0 || len(argTypes) == 0 {
+		return nil, fmt.Errorf("event name is required")
+	}
+
+	topics := Topics{}
+
+	// First topic is always the event signature hash
+	topics = append(topics, Topic{
+		Name:  "topic",
+		Type:  "bytes32",
+		Value: topicHashes[0],
+	})
+
+	rawEventABI, err := event.ConstructABIFromEventSignature()
+	if err != nil {
+		return nil, err
+	}
+
+	eventABI, err := abi.JSON(strings.NewReader(rawEventABI))
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a new ABI with only non-indexed inputs
+	nonIndexedInputs := abi.Arguments{}
+	for _, input := range eventABI.Events[name].Inputs {
+		if !input.Indexed {
+			nonIndexedInputs = append(nonIndexedInputs, input)
+		}
+	}
+
+	unpacked := &map[string]any{}
+
+	// Unpack only non-indexed parameters
+	err = abi.Arguments(nonIndexedInputs).UnpackIntoMap(*unpacked, data)
+	if err != nil {
+		return nil, err
+	}
+
+	indexedTopicIndex := 1
+	// Parse remaining topics
+	for i, argType := range argTypes {
+		t := Topic{
+			Name: args[i],
+			Type: argType.Name,
+		}
+
+		if argType.Indexed {
+			err := t.convertHashToValue(topicHashes[indexedTopicIndex])
+			if err != nil {
+				return nil, err
+			}
+
+			topics = append(topics, t)
+
+			indexedTopicIndex++
+
+			continue
+		}
+
+		t.Value = (*unpacked)[args[i]]
+
+		topics = append(topics, t)
+	}
+
+	return topics, nil
+}
 
 func (t *Topics) String() string {
 	ts := make([]string, len(*t))
@@ -32,6 +112,9 @@ func (t Topics) MarshalJSON() ([]byte, error) {
 	m := map[string]any{}
 
 	for _, topic := range t {
+		if topic.Name == "" {
+			continue
+		}
 		m[topic.Name] = topic.valueToJsonParseable()
 	}
 
@@ -50,9 +133,64 @@ func (t *Topic) valueToJsonParseable() any {
 		return base64.StdEncoding.EncodeToString(v)
 	case common.Address:
 		return v.Hex()
+	case common.Hash:
+		return v.Hex()
 	default:
 		return v
 	}
+}
+
+func (t *Topic) convertHashToValue(hash common.Hash) error {
+	bytes := hash.Bytes()
+
+	switch t.Type {
+	case "bool":
+		t.Value = bytes[31] != 0
+		return nil
+	case "address":
+		t.Value = common.HexToAddress(hash.Hex())
+		return nil
+	case "string", "bytes":
+		// For dynamic types, the hash is actually a pointer to the data
+		// In this case, we can't retrieve the actual value from just the hash
+		t.Value = hash.Hex()
+		return nil
+	default:
+		// Handle integer types
+		if strings.HasPrefix(t.Type, "uint") || strings.HasPrefix(t.Type, "int") {
+			bitSize, err := strconv.Atoi(strings.TrimPrefix(strings.TrimPrefix(t.Type, "uint"), "int"))
+			if err != nil {
+				bitSize = 256 // Default to 256 if no size specified
+			}
+
+			value := new(big.Int).SetBytes(bytes)
+
+			if strings.HasPrefix(t.Type, "int") && bitSize < 256 {
+				// Handle sign extension for smaller signed integers
+				if value.Bit(bitSize-1) == 1 {
+					mask := new(big.Int).Lsh(big.NewInt(1), uint(bitSize))
+					mask.Sub(mask, big.NewInt(1))
+					value.And(value, mask)
+					value.Neg(value)
+				}
+			}
+
+			t.Value = value
+			return nil
+		}
+
+		// Handle fixed-size byte arrays
+		if strings.HasPrefix(t.Type, "bytes") {
+			size, err := strconv.Atoi(strings.TrimPrefix(t.Type, "bytes"))
+			if err != nil {
+				return fmt.Errorf("invalid bytes type: %s", t.Type)
+			}
+			t.Value = bytes[:size]
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unsupported type: %s", t.Type)
 }
 
 func (t Topics) Value() (driver.Value, error) {

@@ -9,6 +9,7 @@ import (
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ethrequest"
+	"github.com/citizenwallet/engine/internal/indexer"
 	"github.com/citizenwallet/engine/internal/queue"
 	"github.com/citizenwallet/engine/internal/ws"
 )
@@ -21,6 +22,10 @@ func main() {
 	port := flag.Int("port", 3001, "port to listen on")
 
 	env := flag.String("env", ".env", "path to .env file")
+
+	polling := flag.Bool("polling", false, "enable polling")
+
+	noindex := flag.Bool("noindex", false, "disable indexing")
 
 	useropqbf := flag.Int("buffer", 1000, "userop queue buffer size (default: 1000)")
 
@@ -39,7 +44,15 @@ func main() {
 
 	////////////////////
 	// evm
-	evm, err := ethrequest.NewEthService(ctx, conf.RPCURL)
+	rpcUrl := conf.RPCURL
+	if !*polling {
+		log.Default().Println("running in streaming mode...")
+		rpcUrl = conf.RPCWSURL
+	} else {
+		log.Default().Println("running in polling mode...")
+	}
+
+	evm, err := ethrequest.NewEthService(ctx, rpcUrl)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -99,6 +112,18 @@ func main() {
 	////////////////////
 
 	////////////////////
+	// indexer
+	if !*noindex {
+		log.Default().Println("starting indexer service...")
+
+		idx := indexer.NewIndexer(ctx, d, evm)
+		go func() {
+			quitAck <- idx.Start()
+		}()
+	}
+	////////////////////
+
+	////////////////////
 	// userop queue
 	log.Default().Println("starting userop queue service...")
 
@@ -123,7 +148,9 @@ func main() {
 	// api
 	s := api.NewServer(chid, d, evm, useropq, pools)
 
-	wsr := s.CreateRoutes()
+	wsr := s.CreateBaseRouter()
+	wsr = s.AddMiddleware(wsr)
+	wsr = s.AddRoutes(wsr)
 
 	go func() {
 		quitAck <- s.Start(*port, wsr)

@@ -3,6 +3,9 @@ package engine
 import (
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEvent_ParseEventSignature(t *testing.T) {
@@ -11,28 +14,28 @@ func TestEvent_ParseEventSignature(t *testing.T) {
 		signature     string
 		wantEventName string
 		wantArgNames  []string
-		wantArgTypes  []string
+		wantArgTypes  []ArgType
 	}{
 		{
 			name:          "Full signature with named arguments and spaces",
 			signature:     "Transfer(from address, to address, value uint256)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
-			wantArgTypes:  []string{"address", "address", "uint256"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Full signature with named arguments",
 			signature:     "Transfer(from address,to address,value uint256)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
-			wantArgTypes:  []string{"address", "address", "uint256"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Compact signature without named arguments",
 			signature:     "Transfer(address,address,uint256)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"0", "1", "2"},
-			wantArgTypes:  []string{"address", "address", "uint256"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}},
 		},
 	}
 
@@ -51,6 +54,157 @@ func TestEvent_ParseEventSignature(t *testing.T) {
 
 			if !reflect.DeepEqual(gotArgTypes, tt.wantArgTypes) {
 				t.Errorf("Event.ParseEventSignature() argTypes = %v, want %v", gotArgTypes, tt.wantArgTypes)
+			}
+		})
+	}
+}
+
+func TestEvent_ParseIndexedEventSignature(t *testing.T) {
+	tests := []struct {
+		name          string
+		signature     string
+		wantEventName string
+		wantArgNames  []string
+		wantArgTypes  []ArgType
+	}{
+		{
+			name:          "Full signature with named arguments and spaces",
+			signature:     "Transfer(from indexed address, to indexed address, value uint256)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"from", "to", "value"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
+		},
+		{
+			name:          "Full signature with named arguments",
+			signature:     "Transfer(from indexed address,to indexed address,value uint256)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"from", "to", "value"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
+		},
+		{
+			name:          "Compact signature without named arguments",
+			signature:     "Transfer(indexed address,indexed address,uint256)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"0", "1", "2"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
+		},
+		{
+			name:          "Compact signature without named arguments",
+			signature:     "Transfer(address,indexed address,indexed uint256)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"0", "1", "2"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: true}},
+		},
+		{
+			name:          "Compact signature without named arguments",
+			signature:     "Transfer(uint256,indexed address,indexed address)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"0", "1", "2"},
+			wantArgTypes:  []ArgType{{Name: "uint256", Indexed: false}, {Name: "address", Indexed: true}, {Name: "address", Indexed: true}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &Event{EventSignature: tt.signature}
+			gotEventName, gotArgNames, gotArgTypes := e.ParseEventSignature()
+
+			if gotEventName != tt.wantEventName {
+				t.Errorf("Event.ParseEventSignature() eventName = %v, want %v", gotEventName, tt.wantEventName)
+			}
+
+			if !reflect.DeepEqual(gotArgNames, tt.wantArgNames) {
+				t.Errorf("Event.ParseEventSignature() argNames = %v, want %v", gotArgNames, tt.wantArgNames)
+			}
+
+			if !reflect.DeepEqual(gotArgTypes, tt.wantArgTypes) {
+				t.Errorf("Event.ParseEventSignature() argTypes = %v, want %v", gotArgTypes, tt.wantArgTypes)
+			}
+		})
+	}
+}
+
+func TestGetTopic0FromEventSignature(t *testing.T) {
+	testCases := []struct {
+		name           string
+		eventSignature string
+		expectedTopic0 string
+	}{
+		{
+			name:           "Transfer event",
+			eventSignature: "Transfer(address,address,uint256)",
+			expectedTopic0: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+		},
+		{
+			name:           "Approval event",
+			eventSignature: "Approval(address,address,uint256)",
+			expectedTopic0: "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
+		},
+		{
+			name:           "Named arguments",
+			eventSignature: "Transfer(from address, to address, value uint256)",
+			expectedTopic0: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+		},
+		{
+			name:           "Empty signature",
+			eventSignature: "",
+			expectedTopic0: "0x0000000000000000000000000000000000000000000000000000000000000000",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			event := &Event{EventSignature: tc.eventSignature}
+			topic0 := event.GetTopic0FromEventSignature()
+			expectedTopic0 := common.HexToHash(tc.expectedTopic0)
+			assert.Equal(t, expectedTopic0, topic0, "Topic0 mismatch for event signature: %s", tc.eventSignature)
+		})
+	}
+}
+
+func TestConstructABIFromEventSignature(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventSignature string
+		expectedABI    string
+		expectError    bool
+	}{
+		{
+			name:           "Simple event",
+			eventSignature: "Transfer(from address, to address, value uint256)",
+			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address","indexed":false},{"name":"to","type":"address","indexed":false},{"name":"value","type":"uint256","indexed":false}]}]`,
+			expectError:    false,
+		},
+		{
+			name:           "Event with indexed parameters",
+			eventSignature: "Transfer(from indexed address, to indexed address, value uint256)",
+			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address","indexed":true},{"name":"to","type":"address","indexed":true},{"name":"value","type":"uint256","indexed":false}]}]`,
+			expectError:    false,
+		},
+		{
+			name:           "Event with unnamed parameters",
+			eventSignature: "Transfer(address,address,uint256)",
+			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"0","type":"address","indexed":false},{"name":"1","type":"address","indexed":false},{"name":"2","type":"uint256","indexed":false}]}]`,
+			expectError:    false,
+		},
+		{
+			name:           "Empty event signature",
+			eventSignature: "",
+			expectedABI:    "",
+			expectError:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := &Event{EventSignature: tt.eventSignature}
+			abi, err := event.ConstructABIFromEventSignature()
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.JSONEq(t, tt.expectedABI, abi)
 			}
 		})
 	}

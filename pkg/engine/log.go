@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -61,7 +62,7 @@ func (t *Log) GenerateUniqueHash() string {
 	valueBytes := t.Value.Bytes()
 	buf.Write(common.LeftPadBytes(valueBytes, 32))
 	if t.Data != nil {
-		buf.Write(*t.Data)
+		buf.Write(sortedJSONBytes(t.Data))
 	}
 
 	buf.Write(common.FromHex(t.TxHash))
@@ -97,4 +98,35 @@ func (t *Log) Update(tx *Log) {
 	t.Value = tx.Value
 	t.Data = tx.Data
 	t.Status = tx.Status
+}
+
+func sortedJSONBytes(data *json.RawMessage) []byte {
+	if data == nil {
+		return nil
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal(*data, &m); err != nil {
+		// If it's not a JSON object, return the raw bytes
+		return *data
+	}
+
+	// Get sorted keys
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Build sorted buffer
+	var buf bytes.Buffer
+	for _, k := range keys {
+		v := m[k]
+		keyBytes, _ := json.Marshal(k)
+		valueBytes, _ := json.Marshal(v)
+		buf.Write(keyBytes)
+		buf.Write(valueBytes)
+	}
+
+	return buf.Bytes()
 }
