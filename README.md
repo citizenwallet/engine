@@ -34,8 +34,8 @@ Engine addresses several key challenges in blockchain development:
       - [ ] Event Data (parsed as JSON if possible)
       - [ ] Data (extra data that can be attached as JSON)
     - [ ] Webhooks (make a network request based on an event being triggered)
-  - [ ] Endpoints (/community_sponsor)
-    - [ ] Fetch in a date range
+  - [ ] Endpoints
+    - [x] Fetch in a date range
     - [ ] Submit user operations against Paymaster Z
   - [ ] WebSocket (/community_sponsor)
     - [ ] Listen to Event X on Contract Y
