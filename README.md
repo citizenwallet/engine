@@ -14,43 +14,33 @@ Engine addresses several key challenges in blockchain development:
 
 ## Features
 
-- [ ] Indexer/Bundler
-  - [ ] Listen to Event X
-    - [ ] Smart Contract
-      - [ ] Listen by community_sponsor
-      - [ ] Enable listening to Event X based on events from contract
-        - [ ] Check price <= value that was sent with request
-        - [ ] Check owner
-      - [ ] Disable listening to Event X based on events from contract
-        - [ ] Check owner
-      - [ ] Set a price to enable listening
-        - [ ] Check contract owner
-      - [ ] Contract owner can withdraw
-      - [ ] Set withdrawal address
-        - [ ] Check contract owner
-    - [ ] Store in DB
-      - [ ] Destination Contract Address
-      - [ ] Amount
-      - [ ] Event Data (parsed as JSON if possible)
-      - [ ] Data (extra data that can be attached as JSON)
-    - [ ] Webhooks (make a network request based on an event being triggered)
-  - [ ] Endpoints
-    - [x] Fetch in a date range
-    - [ ] Submit user operations against Paymaster Z
-  - [ ] WebSocket (/community_sponsor)
-    - [ ] Listen to Event X on Contract Y
-    - [ ] Submit user operations against Paymaster Z
-  - [ ] User Operation Queue
-    - [ ] Store in DB
-      - [ ] Hash
-      - [ ] Created at
-      - [ ] Status (processing, submitted, confirmed, reverted)
-      - [ ] User operation (JSON)
-    - [ ] Endpoints
-      - [ ] pm_sponsorUserOperation
-      - [ ] pm_ooSponsorUserOperation
-      - [ ] eth_sendUserOperation
-      - [ ] eth_chainId
+- [ ] Endpoints
+  - [x] Fetch in a date range
+  - [x] Submit user operations against Paymaster Z
+- [ ] WebSocket
+  - [ ] Listen to Event X on Contract Y
+  - [ ] Submit user operations against Paymaster Z
+- [x] Bundler RPC Endpoints
+  - [x] pm_sponsorUserOperation
+  - [x] pm_ooSponsorUserOperation
+  - [x] eth_sendUserOperation
+  - [x] eth_chainId
+- [ ] Smart Contract Logs
+  - [ ] Indexing
+    - [ ] Listen by Contract + Event Signature
+    - [ ] Mechanism to automate requests to start indexing
+      - [ ] Manually for system admins
+      - [ ] By listening to a Smart Contract (people could pay to start indexing)
+  - [x] Store in DB
+    - [x] Hash
+    - [x] Created at
+    - [x] Destination Contract Address
+    - [x] Amount
+    - [x] Status
+    - [x] Topics (as JSON)
+    - [x] Extra Data (as JSON)
+  - [ ] Listen by Contract + Event Signature + Topic name/value (optional)
+  - [ ] Webhooks (make a network request based on an event being triggered)
 
 ## About Citizen Wallet
 
