@@ -39,7 +39,7 @@ Engine addresses several key challenges in blockchain development:
   - [x] Store in DB
     - [x] Hash
     - [x] Created at
-    - [ ] Sender (used to determine if modifying extra data is allowed)
+    - [x] Sender (used to determine if modifying extra data is allowed)
     - [x] Destination Contract Address
     - [x] Amount
     - [x] Status
