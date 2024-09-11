@@ -227,38 +227,18 @@ func (db *LogDB) GetLog(hash string) (*engine.Log, error) {
 }
 
 // GetAllPaginatedLogs returns the logs paginated
-func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate time.Time, topics engine.Topics, limit, offset int) ([]*engine.Log, error) {
+func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate time.Time, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
 	SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
 	FROM t_logs_%s
 	WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
-	`, db.suffix)
-
-	args := []any{contract, signature, maxDate}
-
-	orderLimit := `
 	ORDER BY created_at DESC
 	LIMIT $4 OFFSET $5
-	`
-	if len(topics) > 0 {
-		topicQuery, topicArgs := topics.GenerateTopicQuery(len(args) + 1)
+	`, db.suffix)
 
-		query += topicQuery
-
-		args = append(args, topicArgs...)
-
-		argsLength := len(args)
-
-		orderLimit = fmt.Sprintf(`
-		ORDER BY created_at DESC LIMIT $%d OFFSET $%d
-		`, argsLength+1, argsLength+2)
-	}
-
-	args = append(args, limit, offset)
-
-	query += orderLimit
+	args := []any{contract, signature, maxDate, limit, offset}
 
 	rows, err := db.rdb.Query(db.ctx, query, args...)
 	if err != nil {
@@ -289,7 +269,7 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 }
 
 // GetPaginatedLogs returns the logs for a given from_addr or to_addr paginated
-func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate time.Time, topics engine.Topics, topics2 engine.Topics, limit, offset int) ([]*engine.Log, error) {
+func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate time.Time, dataFilters, dataFilters2 map[string]any, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
@@ -305,24 +285,28 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 		LIMIT $4 OFFSET $5
 		`
 
-	if len(topics) > 0 {
-		topicQuery, topicArgs := topics.GenerateTopicQuery(len(args) + 1)
+	if len(dataFilters) > 0 {
+		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
 
+		query += `AND `
 		query += topicQuery
 
 		args = append(args, topicArgs...)
 
-		if len(topics2) > 0 {
+		if len(dataFilters2) > 0 {
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
+				SELECT hash, tx_hash, created_at, updated_at, nonce, dest, value, data, extra_data, status
+				FROM t_logs_%s
 				WHERE dest = $%d AND data->>'topic' = $%d AND created_at <= $%d
-				`, len(args)+1, len(args)+2, len(args)+3)
+				`, db.suffix, len(args)+1, len(args)+2, len(args)+3)
 
 			args = append(args, contract, signature, maxDate)
 
-			topicQuery2, topicArgs2 := topics2.GenerateTopicQuery(len(args) + 1)
+			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery(len(args)+1, dataFilters2)
 
+			query += `AND `
 			query += topicQuery2
 
 			args = append(args, topicArgs2...)
@@ -368,7 +352,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 }
 
 // GetNewLogs returns the logs for a given from_addr or to_addr from a given date
-func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.Time, topics engine.Topics, limit, offset int) ([]*engine.Log, error) {
+func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.Time, dataFilters map[string]any, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
@@ -383,9 +367,10 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 		ORDER BY created_at DESC
 		LIMIT $4 OFFSET $5
 		`
-	if len(topics) > 0 {
-		topicQuery, topicArgs := topics.GenerateTopicQuery(len(args) + 1)
+	if len(dataFilters) > 0 {
+		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
 
+		query += `AND `
 		query += topicQuery
 
 		args = append(args, topicArgs...)
@@ -430,7 +415,7 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 }
 
 // GetNewLogs returns the logs for a given from_addr or to_addr from a given date
-func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Time, topics engine.Topics, topics2 engine.Topics, limit, offset int) ([]*engine.Log, error) {
+func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Time, dataFilters, dataFilters2 map[string]any, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
@@ -445,24 +430,28 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 		ORDER BY created_at DESC
 		LIMIT $3 OFFSET $4
 		`
-	if len(topics) > 0 {
-		topicQuery, topicArgs := topics.GenerateTopicQuery(len(args) + 1)
+	if len(dataFilters) > 0 {
+		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
 
+		query += `AND `
 		query += topicQuery
 
 		args = append(args, topicArgs...)
 
-		if len(topics2) > 0 {
+		if len(dataFilters2) > 0 {
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
+				SELECT hash, tx_hash, created_at, nonce, dest, value, data, extra_data, status
+				FROM t_logs_%s
 				WHERE dest = $%d AND created_at >= $%d
-				`, len(args)+1, len(args)+2)
+				`, db.suffix, len(args)+1, len(args)+2)
 
 			args = append(args, contract, fromDate)
 
-			topicQuery2, topicArgs2 := topics2.GenerateTopicQuery(len(args) + 1)
+			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery(len(args)+1, dataFilters2)
 
+			query += `AND `
 			query += topicQuery2
 
 			args = append(args, topicArgs2...)

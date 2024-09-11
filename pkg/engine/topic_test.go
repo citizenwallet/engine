@@ -3,6 +3,8 @@ package engine
 import (
 	"encoding/json"
 	"math/big"
+	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -176,4 +178,114 @@ func TestParseTopicsFromHashes(t *testing.T) {
 	assert.Equal(t, "to", topics[2].Name)
 	assert.Equal(t, "address", topics[2].Type)
 	assert.Equal(t, common.HexToAddress("0xbcd4042de499d14e55001ccbb24a551f3b954096"), topics[2].Value)
+}
+
+func TestParseJSONBFilters(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    url.Values
+		expected map[string]any
+	}{
+		{
+			name:     "Empty query",
+			query:    url.Values{},
+			expected: map[string]any{},
+		},
+		{
+			name: "Single data filter",
+			query: url.Values{
+				"data.name": []string{"John"},
+			},
+			expected: map[string]any{
+				"name": "John",
+			},
+		},
+		{
+			name: "Multiple data filters",
+			query: url.Values{
+				"data.name": []string{"John"},
+				"data.age":  []string{"30"},
+				"data.city": []string{"New York"},
+			},
+			expected: map[string]any{
+				"name": "John",
+				"age":  "30",
+				"city": "New York",
+			},
+		},
+		{
+			name: "Mixed data and non-data filters",
+			query: url.Values{
+				"data.name":    []string{"John"},
+				"data.age":     []string{"30"},
+				"non_data_key": []string{"ignored"},
+			},
+			expected: map[string]any{
+				"name": "John",
+				"age":  "30",
+			},
+		},
+		{
+			name: "Data filter with multiple values",
+			query: url.Values{
+				"data.tags": []string{"tag1", "tag2"},
+			},
+			expected: map[string]any{
+				"tags": "tag1",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseJSONBFilters(tt.query, "data")
+			if !reflect.DeepEqual(result, tt.expected) {
+				t.Errorf("ParseJSONBFilters() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGenerateJSONBQuery(t *testing.T) {
+	tests := []struct {
+		name      string
+		start     int
+		data      map[string]any
+		wantQuery string
+		wantArgs  []any
+	}{
+		{
+			name:      "Empty data",
+			start:     1,
+			data:      map[string]any{},
+			wantQuery: "",
+			wantArgs:  []any{},
+		},
+		{
+			name:      "Single key-value pair",
+			start:     1,
+			data:      map[string]any{"name": "John"},
+			wantQuery: "data->>'name' = $1",
+			wantArgs:  []any{"John"},
+		},
+		{
+			name:      "Multiple key-value pairs",
+			start:     2,
+			data:      map[string]any{"name": "John", "age": 30, "city": "New York"},
+			wantQuery: "data->>'name' = $2 AND data->>'age' = $3 AND data->>'city' = $4",
+			wantArgs:  []any{"John", 30, "New York"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotQuery, gotArgs := GenerateJSONBQuery(tt.start, tt.data)
+			if gotQuery != tt.wantQuery {
+				t.Errorf("GenerateJSONBQuery() gotQuery = %v, want %v", gotQuery, tt.wantQuery)
+			}
+			if !reflect.DeepEqual(gotArgs, tt.wantArgs) {
+				t.Errorf("GenerateJSONBQuery() gotArgs = %v, want %v", gotArgs, tt.wantArgs)
+			}
+		})
+	}
 }

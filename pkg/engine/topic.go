@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -213,4 +214,36 @@ func (t *Topics) GenerateTopicQuery(start int) (string, []any) {
 	topicQuery += `
 		`
 	return topicQuery, args
+}
+
+func ParseJSONBFilters(query url.Values, prefix string) map[string]any {
+	jsonFilter := make(map[string]any)
+
+	for key, values := range query {
+		if strings.HasPrefix(key, prefix+".") && len(values) > 0 {
+			parts := strings.SplitN(key, ".", 2)
+			if len(parts) == 2 {
+				jsonFilter[parts[1]] = values[0]
+			}
+		}
+	}
+
+	return jsonFilter
+}
+
+func GenerateJSONBQuery(start int, data map[string]any) (string, []any) {
+	var query strings.Builder
+	args := make([]any, 0, len(data))
+
+	i := start
+	for key, value := range data {
+		if i > start {
+			query.WriteString(" AND ")
+		}
+		query.WriteString(fmt.Sprintf("data->>'%s' = $%d", key, i))
+		args = append(args, value)
+		i++
+	}
+
+	return query.String(), args
 }

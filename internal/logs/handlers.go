@@ -88,7 +88,7 @@ func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get logs from db
-	logs, err := s.db.LogDB.GetAllPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, engine.Topics{}, limit, offset) // TODO: add topics
+	logs, err := s.db.LogDB.GetAllPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -141,8 +141,10 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
+	dataFilters := engine.ParseJSONBFilters(r.URL.Query(), "data")
+
 	// get logs from db
-	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, engine.Topics{}, limit, offset)
+	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, dataFilters, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -209,8 +211,12 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
+	dataFilters := engine.ParseJSONBFilters(r.URL.Query(), "data")
+
+	dataFilters2 := engine.ParseJSONBFilters(r.URL.Query(), "data2")
+
 	// get logs from db
-	logs, err := s.db.LogDB.GetPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, engine.Topics{}, engine.Topics{}, limit, offset) // TODO: add topics
+	logs, err := s.db.LogDB.GetPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, dataFilters, dataFilters2, limit, offset) // TODO: add topics
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -263,8 +269,12 @@ func (s *Service) GetNew(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
+	dataFilters := engine.ParseJSONBFilters(r.URL.Query(), "data")
+
+	dataFilters2 := engine.ParseJSONBFilters(r.URL.Query(), "data2")
+
 	// get logs from db
-	logs, err := s.db.LogDB.GetNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, engine.Topics{}, engine.Topics{}, limit, offset)
+	logs, err := s.db.LogDB.GetNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, dataFilters, dataFilters2, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
