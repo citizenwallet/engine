@@ -45,6 +45,7 @@ type Log struct {
 	CreatedAt time.Time        `json:"created_at"`
 	UpdatedAt time.Time        `json:"updated_at"`
 	Nonce     int64            `json:"nonce"`
+	Sender    string           `json:"sender"`
 	To        string           `json:"to"`
 	Value     *big.Int         `json:"value"`
 	Data      *json.RawMessage `json:"data"`
