@@ -129,55 +129,61 @@ func TestTopic_convertHashToGoType(t *testing.T) {
 
 func TestParseTopicsFromHashes(t *testing.T) {
 	// Create a mock Event for ERC20 Transfer
-	event := &Event{
+	events := []*Event{{
 		Name:           "Transfer",
-		EventSignature: "Transfer(from indexed address,to indexed address,value uint256)",
+		EventSignature: "Transfer(address indexed from, address indexed to, uint256 value)",
+	}, {
+		Name:           "Transfer",
+		EventSignature: "Transfer(index_topic_1 address from, index_topic_2 address to, uint256 value)",
+	}}
+
+	for _, event := range events {
+
+		rawABI := `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address", "indexed":true},{"name":"to","type":"address", "indexed":true},{"name":"value","type":"uint256", "indexed":false}]}]`
+
+		abi, err := event.ConstructABIFromEventSignature()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.JSONEq(t, rawABI, abi)
+
+		// Create mock topic hashes
+		topicHashes := []common.Hash{
+			common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"), // Transfer event signature
+			common.HexToHash("0x000000000000000000000000a1e4380a3b1f749673e270229993ee55f35663b4"), // from address
+			common.HexToHash("0x000000000000000000000000bcd4042de499d14e55001ccbb24a551f3b954096"), // to address
+		}
+
+		data := common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000186a0")
+
+		// Parse topics
+		topics, err := ParseTopicsFromHashes(event, topicHashes, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Assert no error
+		assert.NoError(t, err)
+
+		// Assert correct number of topics
+		assert.Equal(t, 4, len(topics))
+
+		// Assert event signature topic
+		assert.Equal(t, "topic", topics[0].Name)
+		assert.Equal(t, "bytes32", topics[0].Type)
+		assert.Equal(t, topicHashes[0], topics[0].Value)
+
+		// Assert 'from' address topic
+		assert.Equal(t, "from", topics[1].Name)
+		assert.Equal(t, "address", topics[1].Type)
+		assert.Equal(t, common.HexToAddress("0xa1e4380a3b1f749673e270229993ee55f35663b4"), topics[1].Value)
+
+		// Assert 'to' address topic
+		assert.Equal(t, "to", topics[2].Name)
+		assert.Equal(t, "address", topics[2].Type)
+		assert.Equal(t, common.HexToAddress("0xbcd4042de499d14e55001ccbb24a551f3b954096"), topics[2].Value)
 	}
-
-	rawABI := `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address", "indexed":true},{"name":"to","type":"address", "indexed":true},{"name":"value","type":"uint256", "indexed":false}]}]`
-
-	abi, err := event.ConstructABIFromEventSignature()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	assert.JSONEq(t, rawABI, abi)
-
-	// Create mock topic hashes
-	topicHashes := []common.Hash{
-		common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"), // Transfer event signature
-		common.HexToHash("0x000000000000000000000000a1e4380a3b1f749673e270229993ee55f35663b4"), // from address
-		common.HexToHash("0x000000000000000000000000bcd4042de499d14e55001ccbb24a551f3b954096"), // to address
-	}
-
-	data := common.Hex2Bytes("00000000000000000000000000000000000000000000000000000000000186a0")
-
-	// Parse topics
-	topics, err := ParseTopicsFromHashes(event, topicHashes, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Assert no error
-	assert.NoError(t, err)
-
-	// Assert correct number of topics
-	assert.Equal(t, 4, len(topics))
-
-	// Assert event signature topic
-	assert.Equal(t, "topic", topics[0].Name)
-	assert.Equal(t, "bytes32", topics[0].Type)
-	assert.Equal(t, topicHashes[0], topics[0].Value)
-
-	// Assert 'from' address topic
-	assert.Equal(t, "from", topics[1].Name)
-	assert.Equal(t, "address", topics[1].Type)
-	assert.Equal(t, common.HexToAddress("0xa1e4380a3b1f749673e270229993ee55f35663b4"), topics[1].Value)
-
-	// Assert 'to' address topic
-	assert.Equal(t, "to", topics[2].Name)
-	assert.Equal(t, "address", topics[2].Type)
-	assert.Equal(t, common.HexToAddress("0xbcd4042de499d14e55001ccbb24a551f3b954096"), topics[2].Value)
 }
 
 func TestParseJSONBFilters(t *testing.T) {

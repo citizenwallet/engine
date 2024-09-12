@@ -18,17 +18,31 @@ func TestEvent_ParseEventSignature(t *testing.T) {
 	}{
 		{
 			name:          "Full signature with named arguments and spaces",
-			signature:     "Transfer(from address, to address, value uint256)",
+			signature:     "Transfer(address from, address to, uint256 value)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Full signature with named arguments",
-			signature:     "Transfer(from address,to address,value uint256)",
+			signature:     "Transfer(address from,address to,uint256 value)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}},
+		},
+		{
+			name:          "Full signature with named indexed arguments",
+			signature:     "Transfer(address indexed from,address indexed to,uint256 value)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"from", "to", "value"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
+		},
+		{
+			name:          "Full signature with named indexed arguments",
+			signature:     "Transfer (index_topic_1 address from, index_topic_2 address to, uint256 value)",
+			wantEventName: "Transfer",
+			wantArgNames:  []string{"from", "to", "value"},
+			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Compact signature without named arguments",
@@ -69,35 +83,35 @@ func TestEvent_ParseIndexedEventSignature(t *testing.T) {
 	}{
 		{
 			name:          "Full signature with named arguments and spaces",
-			signature:     "Transfer(from indexed address, to indexed address, value uint256)",
+			signature:     "Transfer(address indexed from, address indexed to, uint256 value)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Full signature with named arguments",
-			signature:     "Transfer(from indexed address,to indexed address,value uint256)",
+			signature:     "Transfer(address indexed from,address indexed to,uint256 value)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"from", "to", "value"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Compact signature without named arguments",
-			signature:     "Transfer(indexed address,indexed address,uint256)",
+			signature:     "Transfer(address indexed,address indexed,uint256)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"0", "1", "2"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}},
 		},
 		{
 			name:          "Compact signature without named arguments",
-			signature:     "Transfer(address,indexed address,indexed uint256)",
+			signature:     "Transfer(address,address indexed,uint256 indexed)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"0", "1", "2"},
 			wantArgTypes:  []ArgType{{Name: "address", Indexed: false}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: true}},
 		},
 		{
 			name:          "Compact signature without named arguments",
-			signature:     "Transfer(uint256,indexed address,indexed address)",
+			signature:     "Transfer(uint256,address indexed,address indexed)",
 			wantEventName: "Transfer",
 			wantArgNames:  []string{"0", "1", "2"},
 			wantArgTypes:  []ArgType{{Name: "uint256", Indexed: false}, {Name: "address", Indexed: true}, {Name: "address", Indexed: true}},
@@ -142,7 +156,17 @@ func TestGetTopic0FromEventSignature(t *testing.T) {
 		},
 		{
 			name:           "Named arguments",
-			eventSignature: "Transfer(from address, to address, value uint256)",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			expectedTopic0: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+		},
+		{
+			name:           "Named indexed arguments",
+			eventSignature: "Transfer(address indexed from, address indexed to, uint256 value)",
+			expectedTopic0: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+		},
+		{
+			name:           "Named indexed arguments",
+			eventSignature: "Transfer (index_topic_1 address from, index_topic_2 address to, uint256 value)",
 			expectedTopic0: "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
 		},
 		{
@@ -171,13 +195,19 @@ func TestConstructABIFromEventSignature(t *testing.T) {
 	}{
 		{
 			name:           "Simple event",
-			eventSignature: "Transfer(from address, to address, value uint256)",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
 			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address","indexed":false},{"name":"to","type":"address","indexed":false},{"name":"value","type":"uint256","indexed":false}]}]`,
 			expectError:    false,
 		},
 		{
 			name:           "Event with indexed parameters",
-			eventSignature: "Transfer(from indexed address, to indexed address, value uint256)",
+			eventSignature: "Transfer(address indexed from, address indexed to, uint256 value)",
+			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address","indexed":true},{"name":"to","type":"address","indexed":true},{"name":"value","type":"uint256","indexed":false}]}]`,
+			expectError:    false,
+		},
+		{
+			name:           "Event with indexed parameters",
+			eventSignature: "Transfer (index_topic_1 address from, index_topic_2 address to, uint256 value)",
 			expectedABI:    `[{"name":"Transfer","type":"event","inputs":[{"name":"from","type":"address","indexed":true},{"name":"to","type":"address","indexed":true},{"name":"value","type":"uint256","indexed":false}]}]`,
 			expectError:    false,
 		},

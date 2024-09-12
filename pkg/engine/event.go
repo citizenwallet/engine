@@ -24,24 +24,27 @@ type ArgType struct {
 }
 
 // Parse human readable event signature
-// Example: Transfer(from address, to address, value uint256)
+// Example: Transfer(address from, address to, uint256 value)
 // Returns: ("Transfer", ["from", "to", "value"], [{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}])
 //
 // Example: Transfer(address,address,uint256)
 // Returns: ("Transfer", ["0", "1", "2"], [{Name: "address", Indexed: false}, {Name: "address", Indexed: false}, {Name: "uint256", Indexed: false}])
 //
-// Example: Transfer(from indexed address, to indexed address, value uint256)
+// Example: Transfer(address indexed from, address indexed to, uint256 value)
 // Returns: ("Transfer", ["from", "to", "value"], [{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}])
 //
-// Example: Transfer(indexed address, indexed address, uint256)
+// Example: Transfer(address indexed, address indexed, uint256)
 // Returns: ("Transfer", ["0", "1", "2"], [{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}])
+//
+// Example: Transfer (index_topic_1 address from, index_topic_2 address to, uint256 value)
+// Returns: ("Transfer", ["from", "to", "value"], [{Name: "address", Indexed: true}, {Name: "address", Indexed: true}, {Name: "uint256", Indexed: false}])
 func (e *Event) ParseEventSignature() (string, []string, []ArgType) {
 	if e.EventSignature == "" {
 		return "", []string{}, []ArgType{}
 	}
 
-	parts := strings.Split(e.EventSignature, "(")
-	eventName := parts[0]
+	parts := strings.SplitN(e.EventSignature, "(", 2)
+	eventName := strings.TrimSpace(parts[0])
 
 	argNames := []string{}
 	argTypes := []ArgType{}
@@ -56,22 +59,26 @@ func (e *Event) ParseEventSignature() (string, []string, []ArgType) {
 		isIndexed := false
 		var argName, argType string
 
-		if len(parts) >= 2 && parts[0] == "indexed" {
-			// Indexed argument
+		// Check for "index_topic_N" format
+		if strings.HasPrefix(parts[0], "index_topic_") {
 			isIndexed = true
-			parts = parts[1:] // Remove "indexed" from parts
+			parts = parts[1:] // Remove "index_topic_N" from parts
 		}
 
-		if len(parts) >= 2 && parts[1] == "indexed" {
+		if len(parts) >= 2 && (parts[0] == "indexed" || parts[1] == "indexed") {
 			// Indexed argument
 			isIndexed = true
-			parts = append(parts[:1], parts[2:]...) // Remove "indexed" from the middle
+			if parts[0] == "indexed" {
+				parts = parts[1:] // Remove "indexed" from the beginning
+			} else {
+				parts = append(parts[:1], parts[2:]...) // Remove "indexed" from the middle
+			}
 		}
 
 		if len(parts) == 2 {
 			// Named argument
-			argName = parts[0]
-			argType = parts[1]
+			argName = parts[1]
+			argType = parts[0]
 		} else if len(parts) == 1 {
 			// Unnamed argument
 			argName = strconv.Itoa(i)
