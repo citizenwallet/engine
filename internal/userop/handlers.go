@@ -98,19 +98,29 @@ func (s *Service) Send(r *http.Request) (any, error) {
 
 			epAddr = v
 		case 2:
-			v, ok := param.(*json.RawMessage)
+			v, ok := param.(map[string]any)
 			if !ok {
-				return nil, errors.New("invalid extra data")
+				return nil, errors.New("invalid user operation")
 			}
 
-			data = v
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, errors.New("error marshalling user operation")
+			}
+
+			data = (*json.RawMessage)(&b)
 		case 3:
-			v, ok := param.(*json.RawMessage)
+			v, ok := param.(map[string]any)
 			if !ok {
-				return nil, errors.New("invalid extra data")
+				return nil, errors.New("invalid user operation")
 			}
 
-			xdata = v
+			b, err := json.Marshal(v)
+			if err != nil {
+				return nil, errors.New("error marshalling user operation")
+			}
+
+			xdata = (*json.RawMessage)(&b)
 		}
 	}
 

@@ -76,8 +76,8 @@ func (i *Indexer) ListenToLogs(ev *engine.Event, quitAck chan error) error {
 
 		l := &engine.Log{
 			TxHash:    log.TxHash.Hex(),
-			CreatedAt: time.Unix(int64(blk.Time), 0),
-			UpdatedAt: time.Now(),
+			CreatedAt: time.Unix(int64(blk.Time), 0).UTC(),
+			UpdatedAt: time.Now().UTC(),
 			Nonce:     int64(0),
 			To:        log.Address.Hex(),
 			Value:     big.NewInt(0), // Set to 0 as we don't have this information from the log
@@ -92,6 +92,8 @@ func (i *Indexer) ListenToLogs(ev *engine.Event, quitAck chan error) error {
 		if err != nil {
 			return err
 		}
+
+		// TODO: cleanup old sending logs which have no data
 
 		// cleanup old pending and sending transfers
 		err = i.db.LogDB.RemoveOldInProgressLogs()
