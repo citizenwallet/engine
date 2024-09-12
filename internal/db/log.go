@@ -144,7 +144,7 @@ func (db *LogDB) AddLog(lg *engine.Log) error {
 	INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, extra_data, status, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	ON CONFLICT (hash) DO NOTHING
-	`, db.suffix), lg.Hash, lg.TxHash, lg.Nonce, lg.To, lg.Value.String(), lg.Data, lg.ExtraData, lg.Status, lg.CreatedAt, lg.UpdatedAt)
+	`, db.suffix), lg.Hash, lg.TxHash, lg.Nonce, lg.Sender, lg.To, lg.Value.String(), lg.Data, lg.ExtraData, lg.Status, lg.CreatedAt, lg.UpdatedAt)
 
 	return err
 }
@@ -159,7 +159,10 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 			ON CONFLICT (hash) DO UPDATE SET
 				tx_hash = EXCLUDED.tx_hash,
 				nonce = EXCLUDED.nonce,
-				sender = EXCLUDED.sender,
+				sender = CASE
+					WHEN EXCLUDED.sender = '' THEN t_logs_%s.sender
+					ELSE COALESCE(EXCLUDED.sender, t_logs_%s.sender)
+				END,
 				dest = EXCLUDED.dest,
 				value = EXCLUDED.value,
 				data = COALESCE(EXCLUDED.data, t_logs_%s.data),
@@ -167,7 +170,7 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 				status = EXCLUDED.status,
 				created_at = EXCLUDED.created_at,
 				updated_at = EXCLUDED.updated_at
-			`, db.suffix, db.suffix, db.suffix), t.Hash, t.TxHash, t.Nonce, t.Sender, t.To, t.Value.String(), t.Data, t.ExtraData, t.Status, t.CreatedAt, t.UpdatedAt)
+			`, db.suffix, db.suffix, db.suffix, db.suffix, db.suffix), t.Hash, t.TxHash, t.Nonce, t.Sender, t.To, t.Value.String(), t.Data, t.ExtraData, t.Status, t.CreatedAt, t.UpdatedAt)
 		if err != nil {
 			return err
 		}

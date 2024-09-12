@@ -333,6 +333,7 @@ func withJSONRPCRequest(hmap map[string]engine.RPCHandlerFunc) http.HandlerFunc 
 			// check if the method is available
 			h, ok := hmap[req.Method]
 			if !ok {
+				println("method not handled", req.Method)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -340,25 +341,26 @@ func withJSONRPCRequest(hmap map[string]engine.RPCHandlerFunc) http.HandlerFunc 
 			r.Body = io.NopCloser(strings.NewReader(string(req.Params)))
 			r.ContentLength = int64(len([]byte(req.Params)))
 
-			body, statusCode := h(r)
-			if statusCode != 200 {
-				w.WriteHeader(statusCode)
-				return
+			body, err := h(r)
+			if err != nil {
+				println(err.Error())
 			}
 
-			comm.JSONRPCBody(w, req.ID, body, nil)
+			comm.JSONRPCBody(w, req.ID, body, nil, err)
 			return
 		}
 
 		// handle multi requests
-		var ids []int
+		var ids []any
 		var bodies []any
+		var errors []error
 
 		for _, req := range multiReq {
 
 			// check if the method is available
 			h, ok := hmap[req.Method]
 			if !ok {
+				println("method not handled", req.Method)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -366,17 +368,17 @@ func withJSONRPCRequest(hmap map[string]engine.RPCHandlerFunc) http.HandlerFunc 
 			r.Body = io.NopCloser(strings.NewReader(string(req.Params)))
 			r.ContentLength = int64(len([]byte(req.Params)))
 
-			body, statusCode := h(r)
-			if statusCode != 200 {
-				w.WriteHeader(statusCode)
-				return
+			body, err := h(r)
+			if err != nil {
+				println(err.Error())
 			}
 
 			ids = append(ids, req.ID)
 			bodies = append(bodies, body)
+			errors = append(errors, err)
 		}
 
-		comm.JSONRPCMultiBody(w, ids, bodies, nil)
+		comm.JSONRPCMultiBody(w, ids, bodies, nil, errors)
 	})
 }
 

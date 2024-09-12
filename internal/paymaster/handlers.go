@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -52,7 +52,7 @@ type paymasterData struct {
 	CallGasLimit         string `json:"callGasLimit"`
 }
 
-func (s *Service) Sponsor(r *http.Request) (any, int) {
+func (s *Service) Sponsor(r *http.Request) (any, error) {
 	// parse contract address from url params
 	contractAddr := chi.URLParam(r, "pm_address")
 
@@ -61,18 +61,18 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 	// Get the contract's bytecode
 	bytecode, err := s.evm.CodeAt(context.Background(), addr, nil)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// Check if the contract is deployed
 	if len(bytecode) == 0 {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("paymaster contract not deployed")
 	}
 
 	// instantiate paymaster contract
 	pm, err := pay.NewPaymaster(addr, s.evm.Backend())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// parse the incoming params
@@ -80,7 +80,7 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 	var params []any
 	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		return nil, http.StatusBadRequest
+		return nil, err
 	}
 
 	var userop engine.UserOp
@@ -92,44 +92,44 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 		case 0:
 			v, ok := param.(map[string]interface{})
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing user operation")
 			}
 			b, err := json.Marshal(v)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, err
 			}
 
 			err = json.Unmarshal(b, &userop)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, err
 			}
 		case 1:
 			v, ok := param.(string)
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing entrypoint address")
 			}
 
 			epAddr = v
 		case 2:
 			v, ok := param.(map[string]interface{})
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing paymaster type")
 			}
 
 			b, err := json.Marshal(v)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error marshalling paymaster type")
 			}
 
 			err = json.Unmarshal(b, &pt)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error unmarshalling paymaster type")
 			}
 		}
 	}
 
 	if epAddr == "" {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error entrypoint address is empty")
 	}
 
 	// verify the nonce
@@ -142,7 +142,7 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 
 	// if the nonce is not 0, then the init code should be empty
 	if nonce.Cmp(big.NewInt(0)) == 1 && initCode != "0x" {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error init code is not empty even though nonce is not 0")
 	}
 
 	// if the nonce is 0, then check that the factory exists
@@ -152,20 +152,19 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 		// Get the contract's bytecode
 		bytecode, err := s.evm.CodeAt(context.Background(), factoryaddr, nil)
 		if err != nil {
-			fmt.Println(err)
-			return nil, http.StatusInternalServerError
+			return nil, err
 		}
 
 		// Check if the contract is deployed
 		if len(bytecode) == 0 {
-			return nil, http.StatusBadRequest
+			return nil, errors.New("error factory contract not found")
 		}
 	}
 
 	// verify the calldata, it should only be allowed to contain the function signatures we allow
 	funcSig := userop.CallData[:4]
 	if !bytes.Equal(funcSig, engine.FuncSigSingle) && !bytes.Equal(funcSig, engine.FuncSigBatch) && !bytes.Equal(funcSig, engine.FuncSigSafeExecFromModule) {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid function signature. supported signatures: execute, executeBatch, execTransactionFromModule")
 	}
 
 	addressArg, _ := abi.NewType("address", "address", nil)
@@ -204,26 +203,26 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 	// Unpack the values
 	callValues, err := callArgs.Unpack(userop.CallData[4:])
 	if err != nil {
-		return nil, http.StatusBadRequest
+		return nil, err
 	}
 
 	// destination address
 	_, ok := callValues[0].(common.Address)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid destination address")
 	}
 
 	// value in uint256
 	callValue, ok := callValues[1].(*big.Int)
 	if !ok || callValue.Cmp(big.NewInt(0)) != 0 {
 		// shouldn't have any value
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid call value")
 	}
 
 	// data in bytes
 	_, ok = callValues[2].([]byte)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid call data")
 	}
 
 	// validity period
@@ -233,7 +232,7 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 
 	// Ensure the values fit within 48 bits
 	if validUntil.BitLen() > 48 || validAfter.BitLen() > 48 {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error invalid validity period")
 	}
 
 	// Define the arguments
@@ -250,12 +249,12 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 	// Encode the values
 	validity, err := args.Pack(validUntil, validAfter)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	hash, err := pm.GetHash(nil, pay.UserOperation(userop), validUntil, validAfter)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// Convert the hash to an Ethereum signed message hash
@@ -264,18 +263,18 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 	// fetch the sponsor's corresponding private key from the db
 	sponsorKey, err := s.db.SponsorDB.GetSponsor(addr.Hex())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error not allowed to operate this paymaster")
 	}
 
 	// Generate ecdsa.PrivateKey from bytes
 	privateKey, err := comm.HexToPrivateKey(sponsorKey.PrivateKey)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error invalid private key")
 	}
 
 	sig, err := crypto.Sign(hhash, privateKey)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error signing hash")
 	}
 
 	// Ensure the v value is 27 or 28, this is because of the way Ethereum signature recovery works
@@ -293,11 +292,11 @@ func (s *Service) Sponsor(r *http.Request) (any, int) {
 		CallGasLimit:         hexutil.EncodeBig(userop.CallGasLimit),
 	}
 
-	return pd, http.StatusOK
+	return pd, nil
 }
 
 // OOSponsor generates multiple signatures that can be used to send user operations in the future
-func (s *Service) OOSponsor(r *http.Request) (any, int) {
+func (s *Service) OOSponsor(r *http.Request) (any, error) {
 	// parse contract address from url params
 	contractAddr := chi.URLParam(r, "pm_address")
 
@@ -306,18 +305,18 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 	// Get the contract's bytecode
 	bytecode, err := s.evm.CodeAt(context.Background(), addr, nil)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// Check if the contract is deployed
 	if len(bytecode) == 0 {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error paymaster contract not deployed")
 	}
 
 	// instantiate paymaster contract
 	pm, err := pay.NewPaymaster(addr, s.evm.Backend())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error instantiating paymaster contract")
 	}
 
 	// parse the incoming params
@@ -325,7 +324,7 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 	var params []any
 	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		return nil, http.StatusBadRequest
+		return nil, err
 	}
 
 	var userop engine.UserOp
@@ -338,38 +337,38 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 		case 0:
 			v, ok := param.(map[string]interface{})
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing user operation")
 			}
 			b, err := json.Marshal(v)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, err
 			}
 
 			err = json.Unmarshal(b, &userop)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, err
 			}
 		case 1:
 			v, ok := param.(string)
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing entrypoint address")
 			}
 
 			epAddr = v
 		case 2:
 			v, ok := param.(map[string]interface{})
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error parsing paymaster type")
 			}
 
 			b, err := json.Marshal(v)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error marshalling paymaster type")
 			}
 
 			err = json.Unmarshal(b, &pt)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, err
 			}
 		case 3:
 			v, ok := param.(float64) // json marshalling converts numbers to float64
@@ -390,13 +389,13 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 	}
 
 	if epAddr == "" {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error entrypoint address is empty")
 	}
 
 	// verify the calldata, it should only be allowed to contain the function signatures we allow
 	funcSig := userop.CallData[:4]
 	if !bytes.Equal(funcSig, engine.FuncSigSingle) && !bytes.Equal(funcSig, engine.FuncSigBatch) && !bytes.Equal(funcSig, engine.FuncSigSafeExecFromModule) {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid function signature. supported signatures: execute, executeBatch, execTransactionFromModule")
 
 	}
 
@@ -436,26 +435,26 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 	// Unpack the values
 	callValues, err := callArgs.Unpack(userop.CallData[4:])
 	if err != nil {
-		return nil, http.StatusBadRequest
+		return nil, err
 	}
 
 	// destination address
 	_, ok := callValues[0].(common.Address)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid destination address")
 	}
 
 	// value in uint256
 	callValue, ok := callValues[1].(*big.Int)
 	if !ok || callValue.Cmp(big.NewInt(0)) != 0 {
 		// shouldn't have any value
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid call value")
 	}
 
 	// data in bytes
 	_, ok = callValues[2].([]byte)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error invalid call data")
 	}
 
 	// validity period
@@ -466,7 +465,7 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 
 	// Ensure the values fit within 48 bits
 	if validUntil.BitLen() > 48 || validAfter.BitLen() > 48 {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error invalid validity period")
 	}
 
 	// Define the arguments
@@ -483,19 +482,19 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 	// Encode the values
 	validity, err := args.Pack(validUntil, validAfter)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// fetch the sponsor's corresponding private key from the db
 	sponsorKey, err := s.db.SponsorDB.GetSponsor(addr.Hex())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error not allowed to operate this paymaster")
 	}
 
 	// Generate ecdsa.PrivateKey from bytes
 	privateKey, err := comm.HexToPrivateKey(sponsorKey.PrivateKey)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error invalid private key")
 	}
 
 	userops := []*engine.UserOp{}
@@ -506,14 +505,14 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 
 		nonce, err := comm.NewNonce()
 		if err != nil {
-			return nil, http.StatusInternalServerError
+			return nil, errors.New("error generating nonce")
 		}
 
 		op.Nonce = nonce.BigInt()
 
 		hash, err := pm.GetHash(nil, pay.UserOperation(op), validUntil, validAfter)
 		if err != nil {
-			return nil, http.StatusInternalServerError
+			return nil, errors.New("error generating hash")
 		}
 
 		// Convert the hash to an Ethereum signed message hash
@@ -521,7 +520,7 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 
 		sig, err := crypto.Sign(hhash, privateKey)
 		if err != nil {
-			return nil, http.StatusInternalServerError
+			return nil, errors.New("error signing hash")
 		}
 
 		// Ensure the v value is 27 or 28, this is because of the way Ethereum signature recovery works
@@ -537,5 +536,5 @@ func (s *Service) OOSponsor(r *http.Request) (any, int) {
 		userops = append(userops, &op)
 	}
 
-	return userops, http.StatusOK
+	return userops, nil
 }

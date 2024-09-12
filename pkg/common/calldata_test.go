@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -107,6 +108,10 @@ func (m *MockEVMRequester) BaseFee() (*big.Int, error) {
 
 // BlockTime implements indexer.EVMRequester.
 func (m *MockEVMRequester) BlockTime(number *big.Int) (uint64, error) {
+	panic("unimplemented")
+}
+
+func (m *MockEVMRequester) Call(method string, result any, params json.RawMessage) error {
 	panic("unimplemented")
 }
 

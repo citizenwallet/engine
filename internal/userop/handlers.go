@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"time"
@@ -37,7 +38,7 @@ func NewService(evm engine.EVMRequester, db *db.DB, useropq *queue.Service, chid
 	}
 }
 
-func (s *Service) Send(r *http.Request) (any, int) {
+func (s *Service) Send(r *http.Request) (any, error) {
 	// parse contract address from url params
 	contractAddr := chi.URLParam(r, "pm_address")
 
@@ -46,18 +47,18 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	// Get the contract's bytecode
 	bytecode, err := s.evm.CodeAt(context.Background(), addr, nil)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// Check if the contract is deployed
 	if len(bytecode) == 0 {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("paymaster contract not deployed")
 	}
 
 	// instantiate paymaster contract
 	pm, err := pay.NewPaymaster(addr, s.evm.Backend())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// parse the incoming params
@@ -65,7 +66,7 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	var params []any
 	err = json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		return nil, http.StatusBadRequest
+		return nil, err
 	}
 
 	var userop engine.UserOp
@@ -78,39 +79,35 @@ func (s *Service) Send(r *http.Request) (any, int) {
 		case 0:
 			v, ok := param.(map[string]any)
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("invalid user operation")
 			}
 			b, err := json.Marshal(v)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error marshalling user operation")
 			}
 
 			err = json.Unmarshal(b, &userop)
 			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("error unmarshalling user operation")
 			}
 		case 1:
 			v, ok := param.(string)
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("invalid entry point address")
 			}
 
 			epAddr = v
 		case 2:
-			v, ok := param.(engine.Topics)
+			v, ok := param.(*json.RawMessage)
 			if !ok {
-				return nil, http.StatusBadRequest
-			}
-			b, err := json.Marshal(v)
-			if err != nil {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("invalid extra data")
 			}
 
-			data = (*json.RawMessage)(&b)
+			data = v
 		case 3:
 			v, ok := param.(*json.RawMessage)
 			if !ok {
-				return nil, http.StatusBadRequest
+				return nil, errors.New("invalid extra data")
 			}
 
 			xdata = v
@@ -118,7 +115,7 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	}
 
 	if epAddr == "" {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("error missing entry point address")
 	}
 
 	// check the paymaster signature, make sure it matches the paymaster address
@@ -138,29 +135,33 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	// Encode the values
 	validity, err := args.Unpack(userop.PaymasterAndData[20:84])
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	validUntil, ok := validity[0].(*big.Int)
 	if !ok {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error unmarshalling validity")
 	}
 
 	validAfter, ok := validity[1].(*big.Int)
 	if !ok {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error unmarshalling validity")
 	}
 
 	// check if the signature is theoretically still valid
 	now := time.Now().Unix()
-	if validUntil.Int64() < now || validAfter.Int64() > now {
-		return nil, http.StatusBadRequest
+	if validUntil.Int64() < now {
+		return nil, errors.New("paymaster signature has expired")
+	}
+
+	if validAfter.Int64() > now {
+		return nil, errors.New("paymaster signature is not valid yet")
 	}
 
 	// Get the hash of the message that was signed
 	hash, err := pm.GetHash(nil, pay.UserOperation(userop), validUntil, validAfter)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, err
 	}
 
 	// Convert the hash to an Ethereum signed message hash
@@ -175,19 +176,19 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	// recover the public key from the signature
 	sigPublicKey, err := crypto.Ecrecover(hhash, sig)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error recovering public key")
 	}
 
 	// fetch the sponsor's corresponding private key from the db
 	sponsorKey, err := s.db.SponsorDB.GetSponsor(addr.Hex())
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error getting sponsor key")
 	}
 
 	// Generate ecdsa.PrivateKey from bytes
 	privateKey, err := comm.HexToPrivateKey(sponsorKey.PrivateKey)
 	if err != nil {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error converting private key")
 	}
 
 	publicKeyBytes := crypto.FromECDSAPub(&privateKey.PublicKey)
@@ -195,7 +196,7 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	// check if the public key matches the recovered public key
 	matches := bytes.Equal(sigPublicKey, publicKeyBytes)
 	if !matches {
-		return nil, http.StatusBadRequest
+		return nil, errors.New("paymaster signature does not match")
 	}
 
 	entryPoint := common.HexToAddress(epAddr)
@@ -209,14 +210,14 @@ func (s *Service) Send(r *http.Request) (any, int) {
 	resp, err := message.WaitForResponse()
 	if err != nil {
 		println("error waiting for response", err.Error())
-		return err.Error(), http.StatusInternalServerError
+		return nil, err
 	}
 
 	txHash, ok := resp.(string)
 	if !ok {
-		return nil, http.StatusInternalServerError
+		return nil, errors.New("error unmarshalling tx hash")
 	}
 
 	// Return the message ID
-	return txHash, http.StatusOK
+	return txHash, nil
 }

@@ -2,6 +2,7 @@ package ethrequest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -237,6 +238,16 @@ func (e *EthService) ChainID() (*big.Int, error) {
 	}
 
 	return chid, nil
+}
+
+func (e *EthService) Call(method string, result any, params json.RawMessage) error {
+	var args []any
+
+	if err := json.Unmarshal(params, &args); err != nil {
+		return fmt.Errorf("failed to unmarshal request body: %w", err)
+	}
+
+	return e.client.Client().Call(result, method, args...)
 }
 
 func (e *EthService) LatestBlock() (*big.Int, error) {

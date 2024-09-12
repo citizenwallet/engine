@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/citizenwallet/engine/pkg/engine"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 type ResponseType string
@@ -89,12 +90,12 @@ func StreamedBody(w http.ResponseWriter, body string) error {
 	return nil
 }
 
-func JSONRPCBody(w http.ResponseWriter, id int, body any, meta any) error {
-
+func JSONRPCBody(w http.ResponseWriter, id any, body any, meta any, err error) error {
 	b, err := json.Marshal(&engine.JsonRPCResponse{
 		Version: "2.0",
 		ID:      id,
 		Result:  body,
+		Error:   parseRPCError(err),
 	})
 	if err != nil {
 		return err
@@ -106,10 +107,14 @@ func JSONRPCBody(w http.ResponseWriter, id int, body any, meta any) error {
 	return nil
 }
 
-func JSONRPCMultiBody(w http.ResponseWriter, ids []int, bodies []any, meta any) error {
+func JSONRPCMultiBody(w http.ResponseWriter, ids []any, bodies []any, meta any, errs []error) error {
 
 	if len(ids) != len(bodies) {
 		return errors.New("ids and bodies must have the same length")
+	}
+
+	if len(ids) != len(errs) {
+		return errors.New("ids and errors must have the same length")
 	}
 
 	responses := make([]engine.JsonRPCResponse, len(ids))
@@ -119,6 +124,7 @@ func JSONRPCMultiBody(w http.ResponseWriter, ids []int, bodies []any, meta any) 
 			Version: "2.0",
 			ID:      id,
 			Result:  bodies[i],
+			Error:   parseRPCError(errs[i]),
 		}
 	}
 
@@ -131,4 +137,22 @@ func JSONRPCMultiBody(w http.ResponseWriter, ids []int, bodies []any, meta any) 
 	w.Write(b)
 
 	return nil
+}
+
+func parseRPCError(err error) *engine.JSONRPCError {
+	if err == nil {
+		return nil
+	}
+
+	if rpcErr, ok := err.(rpc.Error); ok {
+		return &engine.JSONRPCError{
+			Code:    rpcErr.ErrorCode(),
+			Message: rpcErr.Error(),
+		}
+	}
+
+	return &engine.JSONRPCError{
+		Code:    -32000, // Generic server error code
+		Message: err.Error(),
+	}
 }

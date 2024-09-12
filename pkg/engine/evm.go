@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -32,6 +33,7 @@ type EVMRequester interface {
 	StorageAt(addr common.Address, slot common.Hash) ([]byte, error)
 
 	ChainID() (*big.Int, error)
+	Call(method string, result any, params json.RawMessage) error
 	LatestBlock() (*big.Int, error)
 	FilterLogs(q ethereum.FilterQuery) ([]types.Log, error)
 	BlockTime(number *big.Int) (uint64, error)

@@ -71,6 +71,10 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 				"pm_ooSponsorUserOperation": pm.OOSponsor,
 				"eth_sendUserOperation":     uop.Send,
 				"eth_chainId":               ch.ChainId,
+				"eth_call":                  ch.EthCall,
+				"eth_getBlockByNumber":      ch.EthGetBlockByNumber,
+				"eth_maxPriorityFeePerGas":  ch.EthMaxPriorityFeePerGas,
+				"eth_getTransactionReceipt": ch.EthGetTransactionReceipt,
 			}))
 		})
 

@@ -1,6 +1,7 @@
 package chain
 
 import (
+	"encoding/json"
 	"math/big"
 	"net/http"
 
@@ -20,7 +21,76 @@ func NewService(evm engine.EVMRequester, chid *big.Int) *Service {
 	}
 }
 
-func (s *Service) ChainId(r *http.Request) (any, int) {
+func (s *Service) ChainId(r *http.Request) (any, error) {
 	// Return the message ID
-	return s.chainId, http.StatusOK
+	return s.chainId, nil
+}
+
+func (s *Service) EthCall(r *http.Request) (any, error) {
+
+	var params json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		return nil, err
+	}
+
+	var result any
+	err := s.evm.Call("eth_call", &result, params)
+	if err != nil {
+		println(err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *Service) EthGetBlockByNumber(r *http.Request) (any, error) {
+
+	var params json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		return nil, err
+	}
+
+	var result any
+	err := s.evm.Call("eth_getBlockByNumber", &result, params)
+	if err != nil {
+		println(err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *Service) EthMaxPriorityFeePerGas(r *http.Request) (any, error) {
+
+	var params json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		return nil, err
+	}
+
+	var result any
+	err := s.evm.Call("eth_maxPriorityFeePerGas", &result, params)
+	if err != nil {
+		println(err.Error())
+		return nil, err
+	}
+
+	return result, nil
+
+}
+
+func (s *Service) EthGetTransactionReceipt(r *http.Request) (any, error) {
+
+	var params json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		return nil, err
+	}
+
+	var result any
+	err := s.evm.Call("eth_getTransactionReceipt", &result, params)
+	if err != nil {
+		println(err.Error())
+		return nil, err
+	}
+
+	return result, nil
 }

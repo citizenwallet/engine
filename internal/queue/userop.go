@@ -191,6 +191,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				CreatedAt: time.Now().UTC(),
 				UpdatedAt: time.Now().UTC(),
 				Nonce:     userop.Nonce.Int64(),
+				Sender:    userop.Sender.Hex(),
 				To:        dest.Hex(),
 				Value:     common.Big0,
 				Data:      data,
