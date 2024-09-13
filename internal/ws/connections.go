@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -20,6 +21,7 @@ type ConnectionPool struct {
 	unregister chan *Client
 	broadcast  chan []byte
 	mutex      sync.Mutex
+	open       bool
 }
 
 func NewConnectionPool(topic string) *ConnectionPool {
@@ -29,6 +31,7 @@ func NewConnectionPool(topic string) *ConnectionPool {
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan []byte),
+		open:       true,
 	}
 }
 
@@ -80,9 +83,15 @@ func (cm *ConnectionPool) readPump(client *Client) {
 }
 
 func (cm *ConnectionPool) writePump(client *Client) {
-	defer func() {
-		client.conn.Close()
-	}()
+	// Add ping-pong handlers to catch if the client disconnects
+	client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	ticker := time.NewTicker(54 * time.Second)
+	defer ticker.Stop()
 
 	for {
 		select {
@@ -101,6 +110,10 @@ func (cm *ConnectionPool) writePump(client *Client) {
 			if err := w.Close(); err != nil {
 				return
 			}
+		case <-ticker.C:
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -108,7 +121,9 @@ func (cm *ConnectionPool) writePump(client *Client) {
 // Run this method in a separate goroutine
 // Run manages the main loop for the ConnectionPool, handling client registration,
 // unregistration, and message broadcasting. This method should be run in a separate goroutine.
-func (cm *ConnectionPool) Run() {
+func (cm *ConnectionPool) Run() error {
+	defer cm.Close()
+
 	for {
 		select {
 		case client := <-cm.register:
@@ -123,12 +138,33 @@ func (cm *ConnectionPool) Run() {
 				delete(cm.clients, client)
 				close(client.send)
 			}
+			// Check if this was the last client
+			if len(cm.clients) == 0 {
+				cm.mutex.Unlock()
+				return nil // This will trigger the deferred Close()
+			}
 			cm.mutex.Unlock()
 		case message := <-cm.broadcast:
 			// Broadcast a message to all connected clients
 			cm.BroadcastMessage(message)
 		}
 	}
+}
+
+func (cm *ConnectionPool) Close() {
+	cm.open = false
+
+	for client := range cm.clients {
+		cm.unregister <- client
+	}
+
+	close(cm.register)
+	close(cm.unregister)
+	close(cm.broadcast)
+}
+
+func (cm *ConnectionPool) IsOpen() bool {
+	return cm.open
 }
 
 // broadcastMessage sends a message to all connected clients.

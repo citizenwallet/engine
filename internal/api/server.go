@@ -17,10 +17,10 @@ type Server struct {
 	db          *db.DB
 	evm         engine.EVMRequester
 	userOpQueue *queue.Service
-	pools       map[string]*ws.ConnectionPool
+	pools       *ws.ConnectionPools
 }
 
-func NewServer(chainID *big.Int, db *db.DB, evm engine.EVMRequester, userOpQueue *queue.Service, pools map[string]*ws.ConnectionPool) *Server {
+func NewServer(chainID *big.Int, db *db.DB, evm engine.EVMRequester, userOpQueue *queue.Service, pools *ws.ConnectionPools) *Server {
 	return &Server{chainID: chainID, db: db, evm: evm, userOpQueue: userOpQueue, pools: pools}
 }
 

@@ -94,11 +94,26 @@ func (t *Log) Update(tx *Log) {
 	t.TxHash = tx.TxHash
 	t.CreatedAt = tx.CreatedAt
 	t.UpdatedAt = time.Now()
-	t.To = tx.To
 	t.Nonce = tx.Nonce
+	t.Sender = tx.Sender
+	t.To = tx.To
 	t.Value = tx.Value
 	t.Data = tx.Data
+	t.ExtraData = tx.ExtraData
 	t.Status = tx.Status
+}
+
+func (t *Log) GetTopic() *string {
+	var data map[string]any
+
+	json.Unmarshal(*t.Data, &data)
+
+	v, ok := data["topic"].(string)
+	if !ok {
+		return nil
+	}
+
+	return &v
 }
 
 func sortedJSONBytes(data *json.RawMessage) []byte {

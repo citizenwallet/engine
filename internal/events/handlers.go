@@ -9,10 +9,10 @@ import (
 )
 
 type Handlers struct {
-	pools map[string]*ws.ConnectionPool
+	pools *ws.ConnectionPools
 }
 
-func NewHandlers(pools map[string]*ws.ConnectionPool) *Handlers {
+func NewHandlers(pools *ws.ConnectionPools) *Handlers {
 	return &Handlers{
 		pools: pools,
 	}
@@ -26,18 +26,12 @@ func (h *Handlers) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	println(r.URL.RawQuery)
+
 	println("contract", contract)
 	println("topic", topic)
 
 	poolName := fmt.Sprintf("%s:%s", contract, topic)
 
-	pool, ok := h.pools[poolName]
-	if !ok {
-		http.Error(w, "pool not found", http.StatusNotFound)
-		return
-	}
-
-	pool.Connect(w, r)
-
-	pool.BroadcastMessage([]byte("Hello World"))
+	h.pools.Connect(w, r, poolName)
 }

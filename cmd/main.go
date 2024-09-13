@@ -84,10 +84,7 @@ func main() {
 
 	////////////////////
 	// pools
-	pools := make(map[string]*ws.ConnectionPool)
-
-	pools["0x123:0x456"] = ws.NewConnectionPool("0x123:0x456")
-	go pools["0x123:0x456"].Run()
+	pools := ws.NewConnectionPools()
 	////////////////////
 
 	////////////////////
