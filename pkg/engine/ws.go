@@ -25,3 +25,29 @@ type WSMessageLog struct {
 	DataType WSMessageDataType `json:"data_type"`
 	Data     Log               `json:"data"`
 }
+
+type WSMessageCreator interface {
+	ToWSMessage(t WSMessageType) *WSMessageLog
+}
+
+func (l *Log) ToWSMessage(t WSMessageType) *WSMessageLog {
+	poolTopic := l.GetPoolTopic()
+	if poolTopic == nil {
+		return nil
+	}
+
+	b := l.ToJSON()
+	if b == nil {
+		return nil
+	}
+
+	return &WSMessageLog{
+		WSMessage: WSMessage{
+			PoolID: *poolTopic,
+			Type:   t,
+			ID:     l.Hash,
+		},
+		DataType: WSMessageDataTypeLog,
+		Data:     *l,
+	}
+}

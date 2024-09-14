@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/citizenwallet/engine/internal/db"
+	"github.com/citizenwallet/engine/internal/ws"
 	comm "github.com/citizenwallet/engine/pkg/common"
 	"github.com/citizenwallet/engine/pkg/engine"
 	"github.com/citizenwallet/smartcontracts/pkg/contracts/tokenEntryPoint"
@@ -25,16 +26,20 @@ type UserOpService struct {
 	db         *db.DB
 	evm        engine.EVMRequester
 	pushq      *Service
+
+	pools *ws.ConnectionPools
 }
 
 func NewUserOpService(db *db.DB,
 	evm engine.EVMRequester,
-	pushq *Service) *UserOpService {
+	pushq *Service,
+	pools *ws.ConnectionPools) *UserOpService {
 	return &UserOpService{
 		inProgress: map[common.Address][]string{},
 		db:         db,
 		evm:        evm,
 		pushq:      pushq,
+		pools:      pools,
 	}
 }
 
@@ -206,6 +211,9 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				println("error adding log", err.Error())
 			}
 
+			// broadcast updates to connected clients
+			s.pools.BroadcastMessage(engine.WSMessageTypeNew, log)
+
 			insertedLogs[txm.Paymaster] = append(insertedLogs[txm.Paymaster], log)
 		}
 
@@ -219,6 +227,9 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				for _, logs := range insertedLogs {
 					for _, log := range logs {
 						ldb.RemoveLog(log.Hash)
+
+						// broadcast updates to connected clients
+						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
 					}
 				}
 
@@ -241,6 +252,9 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				for _, logs := range insertedLogs {
 					for _, log := range logs {
 						ldb.RemoveLog(log.Hash)
+
+						// broadcast updates to connected clients
+						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
 					}
 				}
 
@@ -261,6 +275,10 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			for _, logs := range insertedLogs {
 				for _, log := range logs {
 					ldb.SetStatus(log.Hash, string(engine.LogStatusFail))
+
+					// broadcast updates to connected clients
+					log.Status = engine.LogStatusFail
+					s.pools.BroadcastMessage(engine.WSMessageTypeUpdate, log)
 				}
 			}
 
@@ -289,6 +307,9 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				err := ldb.SetStatus(log.Hash, string(engine.LogStatusPending))
 				if err != nil {
 					ldb.RemoveLog(log.Hash)
+
+					// broadcast updates to connected clients
+					s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
 				}
 			}
 		}
@@ -300,6 +321,9 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				for _, logs := range insertedLogs {
 					for _, log := range logs {
 						ldb.RemoveLog(log.Hash)
+
+						// broadcast updates to connected clients
+						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
 					}
 				}
 			}

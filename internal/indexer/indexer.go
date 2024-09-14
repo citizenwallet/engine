@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/citizenwallet/engine/internal/db"
+	"github.com/citizenwallet/engine/internal/ws"
 	"github.com/citizenwallet/engine/pkg/engine"
 )
 
@@ -18,10 +19,12 @@ type Indexer struct {
 	ctx context.Context
 	db  *db.DB
 	evm engine.EVMRequester
+
+	pools *ws.ConnectionPools
 }
 
-func NewIndexer(ctx context.Context, db *db.DB, evm engine.EVMRequester) *Indexer {
-	return &Indexer{ctx: ctx, db: db, evm: evm}
+func NewIndexer(ctx context.Context, db *db.DB, evm engine.EVMRequester, pools *ws.ConnectionPools) *Indexer {
+	return &Indexer{ctx: ctx, db: db, evm: evm, pools: pools}
 }
 
 func (i *Indexer) Start() error {

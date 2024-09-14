@@ -31,7 +31,7 @@ func (h *Handlers) HandleConnection(w http.ResponseWriter, r *http.Request) {
 	println("contract", contract)
 	println("topic", topic)
 
-	poolName := fmt.Sprintf("%s:%s", contract, topic)
+	poolName := fmt.Sprintf("%s/%s", contract, topic)
 
 	h.pools.Connect(w, r, poolName)
 }

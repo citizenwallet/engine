@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sort"
 	"time"
@@ -103,7 +104,7 @@ func (t *Log) Update(tx *Log) {
 	t.Status = tx.Status
 }
 
-func (t *Log) GetTopic() *string {
+func (t *Log) GetPoolTopic() *string {
 	var data map[string]any
 
 	json.Unmarshal(*t.Data, &data)
@@ -113,7 +114,19 @@ func (t *Log) GetTopic() *string {
 		return nil
 	}
 
-	return &v
+	topic := fmt.Sprintf("%s/%s", t.To, v)
+
+	return &topic
+}
+
+// Convert a log to json bytes
+func (t *Log) ToJSON() []byte {
+	b, err := json.Marshal(t)
+	if err != nil {
+		return nil
+	}
+
+	return b
 }
 
 func sortedJSONBytes(data *json.RawMessage) []byte {

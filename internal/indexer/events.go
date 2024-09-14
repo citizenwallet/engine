@@ -93,6 +93,8 @@ func (i *Indexer) ListenToLogs(ev *engine.Event, quitAck chan error) error {
 			return err
 		}
 
+		i.pools.BroadcastMessage(engine.WSMessageTypeUpdate, l)
+
 		// TODO: cleanup old sending logs which have no data
 
 		// cleanup old pending and sending transfers
