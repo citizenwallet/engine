@@ -29,7 +29,8 @@ Engine addresses several key challenges in blockchain development:
   - [x] Endpoints
     - [x] Fetch in a date range
   - [ ] WebSocket
-    - [ ] Listen by Contract + Event Signature + Topic name/value (optional)
+    - [x] Listen by Contract + Event Signature + Data (optional)
+    - [ ] Listen by Contract + Event Signature + Data OR Data (optional)
   - [x] Indexing
     - [x] Listen by Contract + Event Signature
   - [ ] Mechanism to automate requests to start indexing
