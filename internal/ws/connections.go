@@ -10,13 +10,14 @@ import (
 )
 
 type Client struct {
-	conn *websocket.Conn
-	send chan []byte
+	query string
+	conn  *websocket.Conn
+	send  chan []byte
 }
 
 type ConnectionPool struct {
 	topic      string
-	clients    map[*Client]bool
+	clients    map[string]map[*Client]bool
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan []byte
@@ -27,7 +28,7 @@ type ConnectionPool struct {
 func NewConnectionPool(topic string) *ConnectionPool {
 	return &ConnectionPool{
 		topic:      topic,
-		clients:    make(map[*Client]bool),
+		clients:    make(map[string]map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan []byte),
@@ -50,7 +51,9 @@ func (cm *ConnectionPool) Connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{conn: conn, send: make(chan []byte, 256)}
+	query := r.URL.RawQuery
+
+	client := &Client{conn: conn, send: make(chan []byte, 256), query: query}
 	cm.register <- client
 
 	go cm.readPump(client)
@@ -74,10 +77,6 @@ func (cm *ConnectionPool) readPump(client *Client) {
 
 		if string(message) == "ping" {
 			client.send <- []byte("pong")
-		}
-
-		if string(message) == "ding" {
-			cm.broadcast <- []byte("dong")
 		}
 	}
 }
@@ -129,13 +128,22 @@ func (cm *ConnectionPool) Run() error {
 		case client := <-cm.register:
 			// Register a new client
 			cm.mutex.Lock()
-			cm.clients[client] = true
+			if _, ok := cm.clients[client.query]; !ok {
+				cm.clients[client.query] = make(map[*Client]bool)
+			}
+			cm.clients[client.query][client] = true
 			cm.mutex.Unlock()
 		case client := <-cm.unregister:
 			// Unregister a client and close its send channel
 			cm.mutex.Lock()
-			if _, ok := cm.clients[client]; ok {
-				delete(cm.clients, client)
+			if _, ok := cm.clients[client.query]; ok {
+				delete(cm.clients, client.query)
+
+				// if there are no more clients for this query, remove the query
+				if len(cm.clients[client.query]) == 0 {
+					delete(cm.clients, client.query)
+				}
+
 				close(client.send)
 			}
 			// Check if this was the last client
@@ -144,9 +152,9 @@ func (cm *ConnectionPool) Run() error {
 				return nil // This will trigger the deferred Close()
 			}
 			cm.mutex.Unlock()
-		case message := <-cm.broadcast:
-			// Broadcast a message to all connected clients
-			cm.BroadcastMessage(message)
+			// case message := <-cm.broadcast:
+			// 	// Broadcast a message to all connected clients
+			// 	cm.BroadcastMessage(message)
 		}
 	}
 }
@@ -154,8 +162,10 @@ func (cm *ConnectionPool) Run() error {
 func (cm *ConnectionPool) Close() {
 	cm.open = false
 
-	for client := range cm.clients {
-		cm.unregister <- client
+	for _, clients := range cm.clients {
+		for client := range clients {
+			cm.unregister <- client
+		}
 	}
 
 	close(cm.register)
@@ -167,13 +177,24 @@ func (cm *ConnectionPool) IsOpen() bool {
 	return cm.open
 }
 
+// returns all queries in the connection pool
+func (cm *ConnectionPool) Queries() []string {
+	cm.mutex.Lock()
+	queries := make([]string, 0, len(cm.clients))
+	for query := range cm.clients {
+		queries = append(queries, query)
+	}
+	cm.mutex.Unlock()
+	return queries
+}
+
 // broadcastMessage sends a message to all connected clients.
 // If a client's send channel is full, it is unregistered.
-func (cm *ConnectionPool) BroadcastMessage(message []byte) {
+func (cm *ConnectionPool) BroadcastMessage(query string, message []byte) {
 	// Create a copy of the clients map to avoid holding the lock while sending
 	cm.mutex.Lock()
-	clients := make([]*Client, 0, len(cm.clients))
-	for client := range cm.clients {
+	clients := make([]*Client, 0, len(cm.clients[query]))
+	for client := range cm.clients[query] {
 		clients = append(clients, client)
 	}
 	cm.mutex.Unlock()

@@ -37,23 +37,27 @@ func (p *ConnectionPools) Connect(w http.ResponseWriter, r *http.Request, topic 
 
 // BroadcastMessage broadcasts a message to all clients in a topic
 func (p *ConnectionPools) BroadcastMessage(t engine.WSMessageType, m engine.WSMessageCreator) {
-	println("broadcast message")
 	wsm := m.ToWSMessage(t)
 	if wsm == nil {
 		return
 	}
-
-	println("pool id", wsm.PoolID)
 
 	b, err := json.Marshal(wsm)
 	if err != nil {
 		return
 	}
 
-	println(string(b))
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	if pool, ok := p.pools[wsm.PoolID]; ok && pool.IsOpen() {
-		println("pool is open")
-		pool.BroadcastMessage(b)
+		queries := pool.Queries()
+		for _, query := range queries {
+			if !m.MatchesQuery(query) {
+				continue
+			}
+
+			pool.BroadcastMessage(query, b)
+		}
 	}
 }

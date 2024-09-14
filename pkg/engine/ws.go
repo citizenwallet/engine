@@ -1,5 +1,11 @@
 package engine
 
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
 type WSMessageType string
 
 const (
@@ -28,6 +34,7 @@ type WSMessageLog struct {
 
 type WSMessageCreator interface {
 	ToWSMessage(t WSMessageType) *WSMessageLog
+	MatchesQuery(query string) bool
 }
 
 func (l *Log) ToWSMessage(t WSMessageType) *WSMessageLog {
@@ -50,4 +57,39 @@ func (l *Log) ToWSMessage(t WSMessageType) *WSMessageLog {
 		DataType: WSMessageDataTypeLog,
 		Data:     *l,
 	}
+}
+
+func (l *Log) MatchesQuery(query string) bool {
+	// Empty query matches everything
+	if query == "" {
+		return true
+	}
+
+	var data map[string]any
+	err := json.Unmarshal(*l.Data, &data)
+	if err != nil {
+		return false
+	}
+
+	// Parse the query string
+	params := strings.Split(query, "&")
+	for _, param := range params {
+		kv := strings.SplitN(param, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		key, value := kv[0], kv[1]
+
+		// Check if the key starts with "data."
+		if strings.HasPrefix(key, "data.") {
+			dataField := strings.TrimPrefix(key, "data.")
+			if dataValue, ok := data[dataField]; ok {
+				if fmt.Sprintf("%v", dataValue) == value {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }
