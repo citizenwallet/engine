@@ -13,8 +13,8 @@ import (
 
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/db"
+	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/pkg/engine"
-	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -46,23 +46,24 @@ func main() {
 	defer sqliteDB.Close()
 
 	// Construct PostgreSQL connection string
-	postgresConnStr := fmt.Sprintf("postgres://%s:%s@%s/%s", conf.DBUser, conf.DBPassword, conf.DBHost, conf.DBName)
-
-	// Connect to PostgreSQL
-	pgPool, err := pgxpool.New(ctx, postgresConnStr)
+	evm, err := ethrequest.NewEthService(ctx, conf.RPCURL)
 	if err != nil {
-		log.Fatalf("Error connecting to PostgreSQL: %v", err)
+		log.Fatal(err)
 	}
-	defer pgPool.Close()
 
-	// Create LogDB
-	logDB, err := db.NewLogDB(ctx, pgPool, pgPool, migrationSuffix)
+	chid, err := evm.ChainID()
 	if err != nil {
-		log.Fatalf("Error creating LogDB: %v", err)
+		log.Fatal(err)
 	}
+
+	d, err := db.NewDB(chid, conf.DBSecret, conf.DBUser, conf.DBPassword, conf.DBName, conf.DBHost, conf.DBReaderHost)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer d.Close()
 
 	// Perform migration
-	err = migrateData(sqliteDB, logDB)
+	err = migrateData(sqliteDB, d.LogDB)
 	if err != nil {
 		log.Fatalf("Error during migration: %v", err)
 	}
