@@ -38,6 +38,20 @@ services:
       - certs_conf_volume:/etc/nginx/ssl/:ro
     healthcheck:
       test: "exit 0"
+  server:
+    image: nginx:latest
+    ports:
+      - 80:80
+      - 443:443
+    restart: always
+    volumes:
+      - ./.engine/nginx/conf/:/etc/nginx/conf.d/:ro
+      - certs_www_volume:/var/www/certbot/:ro
+      - certs_conf_volume:/etc/nginx/ssl/:ro
+    networks:
+      engine-net:
+        aliases:
+          - engine-server
   server-cert:
     image: nginx:latest
     ports:
