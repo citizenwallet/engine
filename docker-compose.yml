@@ -31,11 +31,8 @@ services:
         aliases:
           - engine
     ports:
-      - "443:443"
+      - "3001:3001"
     restart: on-failure
-    volumes:
-      - certs_www_volume:/var/www/certbot/:ro
-      - certs_conf_volume:/etc/nginx/ssl/:ro
     healthcheck:
       test: "exit 0"
   server:
