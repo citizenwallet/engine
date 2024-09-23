@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"log"
 	"math/big"
-	"os"
 	"time"
 
+	"github.com/citizenwallet/engine/cmd/migrate/mtransfer"
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ethrequest"
@@ -62,7 +62,7 @@ func main() {
 	defer d.Close()
 
 	// Perform migration
-	err = migrateData(sqliteDB, d.LogDB)
+	err = migrateData(sqliteDB, d.LogDB, fmt.Sprintf("%s_%s", chid.String(), contractAddress))
 	if err != nil {
 		log.Fatalf("Error during migration: %v", err)
 	}
@@ -70,10 +70,10 @@ func main() {
 	log.Println("Migration completed successfully")
 }
 
-func migrateData(sqliteDB *sql.DB, logDB *db.LogDB) error {
+func migrateData(sqliteDB *sql.DB, logDB *db.LogDB, suffix string) error {
 	offset := 0
 	for {
-		transfers, err := getTransfers(sqliteDB, offset, batchSize)
+		transfers, err := getTransfers(sqliteDB, offset, batchSize, suffix)
 		if err != nil {
 			return fmt.Errorf("error getting transfers: %v", err)
 		}
@@ -96,13 +96,13 @@ func migrateData(sqliteDB *sql.DB, logDB *db.LogDB) error {
 	return nil
 }
 
-func getTransfers(db *sql.DB, offset, limit int) ([]*Transfer, error) {
+func getTransfers(db *sql.DB, offset, limit int, suffix string) ([]*mtransfer.Transfer, error) {
 	query := fmt.Sprintf(`
 		SELECT hash, tx_hash, token_id, created_at, from_addr, to_addr, nonce, value, data, status
 		FROM t_transfers_%s
 		ORDER BY created_at
 		LIMIT ? OFFSET ?
-	`, os.Getenv("CHAIN_ID"))
+	`, suffix)
 
 	rows, err := db.Query(query, limit, offset)
 	if err != nil {
@@ -110,9 +110,9 @@ func getTransfers(db *sql.DB, offset, limit int) ([]*Transfer, error) {
 	}
 	defer rows.Close()
 
-	var transfers []*Transfer
+	var transfers []*mtransfer.Transfer
 	for rows.Next() {
-		var t Transfer
+		var t mtransfer.Transfer
 		var valueStr string
 		err := rows.Scan(&t.Hash, &t.TxHash, &t.TokenID, &t.CreatedAt, &t.From, &t.To, &t.Nonce, &valueStr, &t.Data, &t.Status)
 		if err != nil {
@@ -126,7 +126,7 @@ func getTransfers(db *sql.DB, offset, limit int) ([]*Transfer, error) {
 	return transfers, nil
 }
 
-func convertTransfersToLogs(transfers []*Transfer) []*engine.Log {
+func convertTransfersToLogs(transfers []*mtransfer.Transfer) []*engine.Log {
 	var logs []*engine.Log
 	for _, t := range transfers {
 		data := map[string]interface{}{
