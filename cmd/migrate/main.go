@@ -38,8 +38,7 @@ func main() {
 	}
 
 	// Open SQLite database
-	sqliteDBPath := conf.DBName // Assuming DBName contains the SQLite file path
-	sqliteDB, err := sql.Open("sqlite3", sqliteDBPath)
+	sqliteDB, err := sql.Open("sqlite3", "./cw.db")
 	if err != nil {
 		log.Fatalf("Error opening SQLite database: %v", err)
 	}
