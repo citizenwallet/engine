@@ -43,6 +43,23 @@ func (s *Service) EthCall(r *http.Request) (any, error) {
 	return result, nil
 }
 
+func (s *Service) EthBlockNumber(r *http.Request) (any, error) {
+
+	var params json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+		return nil, err
+	}
+
+	var result any
+	err := s.evm.Call("eth_blockNumber", &result, params)
+	if err != nil {
+		println(err.Error())
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func (s *Service) EthGetBlockByNumber(r *http.Request) (any, error) {
 
 	var params json.RawMessage

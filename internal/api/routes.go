@@ -72,6 +72,7 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 				"eth_sendUserOperation":     uop.Send,
 				"eth_chainId":               ch.ChainId,
 				"eth_call":                  ch.EthCall,
+				"eth_blockNumber":           ch.EthBlockNumber,
 				"eth_getBlockByNumber":      ch.EthGetBlockByNumber,
 				"eth_maxPriorityFeePerGas":  ch.EthMaxPriorityFeePerGas,
 				"eth_getTransactionReceipt": ch.EthGetTransactionReceipt,
