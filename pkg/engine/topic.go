@@ -2,7 +2,6 @@ package engine
 
 import (
 	"database/sql/driver"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -131,7 +130,7 @@ func (t *Topic) valueToJsonParseable() any {
 	case *big.Int:
 		return v.String()
 	case []byte:
-		return base64.StdEncoding.EncodeToString(v)
+		return "0x" + common.Bytes2Hex(v)
 	case common.Address:
 		return v.Hex()
 	case common.Hash:
