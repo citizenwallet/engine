@@ -105,6 +105,10 @@ func (t *Log) Update(tx *Log) {
 }
 
 func (t *Log) GetPoolTopic() *string {
+	if t.Data == nil {
+		return nil
+	}
+
 	var data map[string]any
 
 	json.Unmarshal(*t.Data, &data)
