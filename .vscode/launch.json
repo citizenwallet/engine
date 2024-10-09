@@ -11,6 +11,14 @@
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/main.go",
       "args": ["-env", "../.env"]
+    },
+    {
+      "name": "Launch noindex",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/main.go",
+      "args": ["-env", "../.env", "-noindex"]
     }
   ]
 }
