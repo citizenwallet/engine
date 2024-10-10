@@ -49,7 +49,26 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 		cr.Get("/", v.Current)
 	})
 
+	// cr.Route("/legacy", func(cr chi.Router) {
+	// 	// TODO: implement legacy routes
+	// 	cr.Get("/account/{address}/exists", l.Get)
+	// })
+
 	cr.Route("/v1", func(cr chi.Router) {
+		// profiles
+		// cr.Route("/profiles/v2", func(cr chi.Router) {
+		// 	cr.Route("/{contract_address}", func(cr chi.Router) {
+		// 		cr.Put("/{acc_addr}", withMultiPartSignature(r.evm, pr.PinMultiPartProfile))
+		// 		cr.Patch("/{acc_addr}", withSignature(r.evm, pr.PinProfile))
+		// 		cr.Delete("/{acc_addr}", withSignature(r.evm, pr.Unpin))
+		// 	})
+		// })
+
+		// push
+		// cr.Route("/push/{contract_address}", func(cr chi.Router) {
+		// 	cr.Put("/{acc_addr}", withSignature(r.evm, pu.AddToken))
+		// 	cr.Delete("/{acc_addr}/{token}", withSignature(r.evm, pu.RemoveAccountToken))
+		// })
 
 		// logs
 		cr.Route("/logs/{contract_address}", func(cr chi.Router) {
