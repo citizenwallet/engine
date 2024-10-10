@@ -239,3 +239,76 @@ func TestConstructABIFromEventSignature(t *testing.T) {
 		})
 	}
 }
+
+func TestEvent_IsValidData(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventSignature string
+		data           map[string]interface{}
+		want           bool
+	}{
+		{
+			name:           "Valid data with named arguments",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			data: map[string]interface{}{
+				"topic": "0x...",
+				"from":  "0x1234...",
+				"to":    "0x5678...",
+				"value": "1000000000000000000",
+			},
+			want: true,
+		},
+		{
+			name:           "Valid data with unnamed arguments",
+			eventSignature: "Transfer(address,address,uint256)",
+			data: map[string]interface{}{
+				"topic": "0x...",
+				"0":     "0x1234...",
+				"1":     "0x5678...",
+				"2":     "1000000000000000000",
+			},
+			want: true,
+		},
+		{
+			name:           "Invalid data - missing topic",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			data: map[string]interface{}{
+				"from":  "0x1234...",
+				"to":    "0x5678...",
+				"value": "1000000000000000000",
+			},
+			want: false,
+		},
+		{
+			name:           "Invalid data - extra field",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			data: map[string]interface{}{
+				"topic": "0x...",
+				"from":  "0x1234...",
+				"to":    "0x5678...",
+				"value": "1000000000000000000",
+				"extra": "extra field",
+			},
+			want: false,
+		},
+		{
+			name:           "Invalid data - missing field",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			data: map[string]interface{}{
+				"topic": "0x...",
+				"from":  "0x1234...",
+				"to":    "0x5678...",
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := &Event{EventSignature: tt.eventSignature}
+			if got := e.IsValidData(tt.data); got != tt.want {
+				t.Errorf("Event.IsValidData() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

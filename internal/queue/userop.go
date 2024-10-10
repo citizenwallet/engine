@@ -169,6 +169,16 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 		insertedLogs := map[common.Address][]*engine.Log{}
 
 		ldb := s.db.LogDB
+		edb := s.db.EventDB
+
+		events, err := edb.GetEvents()
+		if err != nil {
+			invalid = append(invalid, msgs...)
+			for range msgs {
+				errors = append(errors, err)
+			}
+			continue
+		}
 
 		for _, txm := range txms {
 			// Detect if this user operation is a transfer using the call data
@@ -177,6 +187,31 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			data, ok := txm.Data.(*json.RawMessage)
 			if !ok {
 				data = nil
+			}
+
+			if data == nil {
+				// if there is no data, it is impossible for us to generate a stable unique hash
+				// so we skip it
+				continue
+			}
+
+			var dataMap map[string]any
+			if err := json.Unmarshal(*data, &dataMap); err != nil {
+				continue
+			}
+
+			// there is data, let's check if it is valid according to any of the event signatures that we are indexing
+			valid := false
+			for _, event := range events {
+				if event.IsValidData(dataMap) {
+					// we have a match
+					valid = true
+					break
+				}
+			}
+
+			if !valid {
+				continue
 			}
 
 			txdata, ok := txm.ExtraData.(*json.RawMessage)

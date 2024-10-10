@@ -133,3 +133,28 @@ func (e *Event) ConstructABIFromEventSignature() (string, error) {
 
 	return abi, nil
 }
+
+// IsValidData checks if the provided data contains exactly all the argument names
+// returned by ParseEventSignature, plus the "topic" field, no more and no less.
+func (e *Event) IsValidData(data map[string]any) bool {
+	_, argNames, _ := e.ParseEventSignature()
+
+	// Check if the number of keys in data matches the number of argument names plus one (for "topic")
+	if len(data) != len(argNames)+1 {
+		return false
+	}
+
+	// Check if "topic" is present in the data
+	if _, exists := data["topic"]; !exists {
+		return false
+	}
+
+	// Check if all argument names are present in the data
+	for _, argName := range argNames {
+		if _, exists := data[argName]; !exists {
+			return false
+		}
+	}
+
+	return true
+}
