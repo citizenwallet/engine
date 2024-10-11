@@ -55,6 +55,7 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 	// })
 
 	cr.Route("/v1", func(cr chi.Router) {
+		// TODO: get a profile json by address
 		// profiles
 		// cr.Route("/profiles/v2", func(cr chi.Router) {
 		// 	cr.Route("/{contract_address}", func(cr chi.Router) {
