@@ -23,16 +23,21 @@ type ConnectionPool struct {
 	broadcast  chan []byte
 	mutex      sync.Mutex
 	open       bool
+
+	timeout      time.Duration
+	pingInterval time.Duration
 }
 
 func NewConnectionPool(topic string) *ConnectionPool {
 	return &ConnectionPool{
-		topic:      topic,
-		clients:    make(map[string]map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan []byte),
-		open:       true,
+		topic:        topic,
+		clients:      make(map[string]map[*Client]bool),
+		register:     make(chan *Client),
+		unregister:   make(chan *Client),
+		broadcast:    make(chan []byte),
+		open:         true,
+		timeout:      60 * time.Second,
+		pingInterval: 54 * time.Second,
 	}
 }
 
@@ -75,21 +80,20 @@ func (cm *ConnectionPool) readPump(client *Client) {
 			break
 		}
 
-		if string(message) == "ping" {
-			client.send <- []byte("pong")
-		}
+		// handle incoming messages
+		println("received message", string(message))
 	}
 }
 
 func (cm *ConnectionPool) writePump(client *Client) {
 	// Add ping-pong handlers to catch if the client disconnects
-	client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	client.conn.SetReadDeadline(time.Now().Add(cm.timeout))
 	client.conn.SetPongHandler(func(string) error {
-		client.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		client.conn.SetReadDeadline(time.Now().Add(cm.timeout))
 		return nil
 	})
 
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(cm.pingInterval)
 	defer ticker.Stop()
 
 	for {
@@ -137,15 +141,16 @@ func (cm *ConnectionPool) Run() error {
 			// Unregister a client and close its send channel
 			cm.mutex.Lock()
 			if _, ok := cm.clients[client.query]; ok {
-				delete(cm.clients, client.query)
-
+				cm.clients[client.query][client] = false
 				// if there are no more clients for this query, remove the query
-				if len(cm.clients[client.query]) == 0 {
+				if cm.OpenClients(client.query) == 0 {
 					delete(cm.clients, client.query)
 				}
-
-				close(client.send)
 			}
+
+			client.conn.Close()
+			close(client.send)
+
 			// Check if this was the last client
 			if len(cm.clients) == 0 {
 				cm.mutex.Unlock()
@@ -175,6 +180,17 @@ func (cm *ConnectionPool) Close() {
 
 func (cm *ConnectionPool) IsOpen() bool {
 	return cm.open
+}
+
+// returns all clients in a query
+func (cm *ConnectionPool) OpenClients(query string) int {
+	clients := 0
+	for _, open := range cm.clients[query] {
+		if open {
+			clients++
+		}
+	}
+	return clients
 }
 
 // returns all queries in the connection pool
