@@ -93,7 +93,12 @@ func (i *Indexer) ListenToLogs(ev *engine.Event, quitAck chan error) error {
 			return err
 		}
 
-		i.pools.BroadcastMessage(engine.WSMessageTypeUpdate, l)
+		dbLog, err := i.db.LogDB.GetLog(l.Hash)
+		if err != nil {
+			return err
+		}
+
+		i.pools.BroadcastMessage(engine.WSMessageTypeUpdate, dbLog)
 
 		// TODO: cleanup old sending logs which have no data
 
