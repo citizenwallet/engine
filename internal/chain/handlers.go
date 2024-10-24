@@ -23,7 +23,7 @@ func NewService(evm engine.EVMRequester, chid *big.Int) *Service {
 
 func (s *Service) ChainId(r *http.Request) (any, error) {
 	// Return the message ID
-	return s.chainId, nil
+	return s.chainId.String(), nil
 }
 
 func (s *Service) EthCall(r *http.Request) (any, error) {
