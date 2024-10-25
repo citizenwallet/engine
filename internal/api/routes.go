@@ -1,10 +1,12 @@
 package api
 
 import (
+	"github.com/citizenwallet/engine/internal/bucket"
 	"github.com/citizenwallet/engine/internal/chain"
 	"github.com/citizenwallet/engine/internal/events"
 	"github.com/citizenwallet/engine/internal/logs"
 	"github.com/citizenwallet/engine/internal/paymaster"
+	"github.com/citizenwallet/engine/internal/profiles"
 	"github.com/citizenwallet/engine/internal/rpc"
 	"github.com/citizenwallet/engine/internal/userop"
 	"github.com/citizenwallet/engine/internal/version"
@@ -34,7 +36,7 @@ func (s *Server) AddMiddleware(cr *chi.Mux) *chi.Mux {
 	return cr
 }
 
-func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
+func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 	// instantiate handlers
 	v := version.NewService()
 	l := logs.NewService(s.chainID, s.db, s.evm)
@@ -43,6 +45,7 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 	pm := paymaster.NewService(s.evm, s.db)
 	uop := userop.NewService(s.evm, s.db, s.userOpQueue, s.chainID)
 	ch := chain.NewService(s.evm, s.chainID)
+	pr := profiles.NewService(b, s.evm)
 
 	// configure routes
 	cr.Route("/version", func(cr chi.Router) {
@@ -57,13 +60,13 @@ func (s *Server) AddRoutes(cr *chi.Mux) *chi.Mux {
 	cr.Route("/v1", func(cr chi.Router) {
 		// TODO: get a profile json by address
 		// profiles
-		// cr.Route("/profiles/v2", func(cr chi.Router) {
-		// 	cr.Route("/{contract_address}", func(cr chi.Router) {
-		// 		cr.Put("/{acc_addr}", withMultiPartSignature(r.evm, pr.PinMultiPartProfile))
-		// 		cr.Patch("/{acc_addr}", withSignature(r.evm, pr.PinProfile))
-		// 		cr.Delete("/{acc_addr}", withSignature(r.evm, pr.Unpin))
-		// 	})
-		// })
+		cr.Route("/profiles", func(cr chi.Router) {
+			cr.Route("/{contract_address}", func(cr chi.Router) {
+				cr.Put("/{acc_addr}", withMultiPartSignature(s.evm, pr.PinMultiPartProfile))
+				cr.Patch("/{acc_addr}", withSignature(s.evm, pr.PinProfile))
+				cr.Delete("/{acc_addr}", withSignature(s.evm, pr.Unpin))
+			})
+		})
 
 		// push
 		// cr.Route("/push/{contract_address}", func(cr chi.Router) {

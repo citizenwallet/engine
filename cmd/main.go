@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/citizenwallet/engine/internal/api"
+	"github.com/citizenwallet/engine/internal/bucket"
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ethrequest"
@@ -145,9 +146,11 @@ func main() {
 	// api
 	s := api.NewServer(chid, d, evm, useropq, pools)
 
+	bu := bucket.NewBucket(conf.PinataBaseURL, conf.PinataAPIKey, conf.PinataAPISecret)
+
 	wsr := s.CreateBaseRouter()
 	wsr = s.AddMiddleware(wsr)
-	wsr = s.AddRoutes(wsr)
+	wsr = s.AddRoutes(wsr, bu)
 
 	go func() {
 		quitAck <- s.Start(*port, wsr)
