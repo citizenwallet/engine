@@ -3,8 +3,7 @@ FROM golang:1.23.1-alpine AS builder
 ENV GO111MODULE=on \
     CGO_ENABLED=0 \
     GOOS=linux \
-    GOARCH=arm64 \
-    GOPRIVATE=github.com/consensys,github.com/crate-crypto,github.com/ethereum
+    GOARCH=arm64
 
 # create build folder
 RUN mkdir -p /engine-build
