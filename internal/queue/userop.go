@@ -26,8 +26,7 @@ type UserOpService struct {
 	db         *db.DB
 	evm        engine.EVMRequester
 	pushq      *Service
-
-	pools *ws.ConnectionPools
+	pools      *ws.ConnectionPools
 }
 
 func NewUserOpService(db *db.DB,

@@ -23,3 +23,5 @@ data/
 .env
 
 .DS_Store
+
+firebase.json

@@ -7,6 +7,7 @@ import (
 	"github.com/citizenwallet/engine/internal/logs"
 	"github.com/citizenwallet/engine/internal/paymaster"
 	"github.com/citizenwallet/engine/internal/profiles"
+	"github.com/citizenwallet/engine/internal/push"
 	"github.com/citizenwallet/engine/internal/rpc"
 	"github.com/citizenwallet/engine/internal/userop"
 	"github.com/citizenwallet/engine/internal/version"
@@ -46,6 +47,7 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 	uop := userop.NewService(s.evm, s.db, s.userOpQueue, s.chainID)
 	ch := chain.NewService(s.evm, s.chainID)
 	pr := profiles.NewService(b, s.evm)
+	pu := push.NewService(s.db)
 
 	// configure routes
 	cr.Route("/version", func(cr chi.Router) {
@@ -69,10 +71,10 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 		})
 
 		// push
-		// cr.Route("/push/{contract_address}", func(cr chi.Router) {
-		// 	cr.Put("/{acc_addr}", withSignature(r.evm, pu.AddToken))
-		// 	cr.Delete("/{acc_addr}/{token}", withSignature(r.evm, pu.RemoveAccountToken))
-		// })
+		cr.Route("/push/{contract_address}", func(cr chi.Router) {
+			cr.Put("/{acc_addr}", withSignature(s.evm, pu.AddToken))
+			cr.Delete("/{acc_addr}/{token}", withSignature(s.evm, pu.RemoveAccountToken))
+		})
 
 		// logs
 		cr.Route("/logs/{contract_address}", func(cr chi.Router) {
