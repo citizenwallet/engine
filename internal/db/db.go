@@ -35,10 +35,10 @@ type DB struct {
 }
 
 // NewDB instantiates a new DB
-func NewDB(chainID *big.Int, secret, username, password, dbname, host, rhost string) (*DB, error) {
+func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rhost string) (*DB, error) {
 	ctx := context.Background()
 
-	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=5432 sslmode=disable", username, password, dbname, host)
+	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable", username, password, dbname, host, port)
 	db, err := pgxpool.New(ctx, connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)

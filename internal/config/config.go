@@ -16,6 +16,7 @@ type Config struct {
 	DBPassword      string `env:"DB_PASSWORD,required"`
 	DBName          string `env:"DB_NAME,required"`
 	DBHost          string `env:"DB_HOST,required"`
+	DBPort          string `env:"DB_PORT,required"`
 	DBReaderHost    string `env:"DB_READER_HOST,required"`
 	DBSecret        string `env:"DB_SECRET,required"`
 	PinataBaseURL   string `env:"PINATA_BASE_URL"`
