@@ -61,7 +61,12 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rho
 		return nil, err
 	}
 
-	logDB, err := NewLogDB(ctx, db, db, evname)
+	datadb, err := NewDataDB(ctx, db, db, evname)
+	if err != nil {
+		return nil, err
+	}
+
+	logDB, err := NewLogDB(ctx, db, db, evname, datadb)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +138,28 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rho
 
 		// create indexes
 		err = d.LogDB.CreateLogTableIndexes()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	log.Default().Println("creating data db for: ", evname)
+
+	// check if db exists before opening, since we use rwc mode
+	exists, err = d.DataTableExists(evname)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		// create table
+		err = datadb.CreateDataTable()
+		if err != nil {
+			return nil, err
+		}
+
+		// create indexes
+		err = datadb.CreateDataTableIndexes()
 		if err != nil {
 			return nil, err
 		}
@@ -223,6 +250,18 @@ func (db *DB) LogTableExists(suffix string) (bool, error) {
 // PushTokenTableExists checks if a table exists in the database
 func (db *DB) PushTokenTableExists(suffix string) (bool, error) {
 	tableName := fmt.Sprintf("t_push_token_%s", suffix)
+	var exists bool
+	err := db.rdb.QueryRow(db.ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", tableName).Scan(&exists)
+	if err != nil {
+		// A database error occurred
+		return false, err
+	}
+	return exists, nil
+}
+
+// DataTableExists checks if a table exists in the database
+func (db *DB) DataTableExists(suffix string) (bool, error) {
+	tableName := fmt.Sprintf("t_logs_data_%s", suffix)
 	var exists bool
 	err := db.rdb.QueryRow(db.ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", tableName).Scan(&exists)
 	if err != nil {

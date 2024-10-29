@@ -17,15 +17,17 @@ type LogDB struct {
 	suffix string
 	db     *pgxpool.Pool
 	rdb    *pgxpool.Pool
+	datadb *DataDB
 }
 
 // NewLogDB creates a new DB
-func NewLogDB(ctx context.Context, db, rdb *pgxpool.Pool, name string) (*LogDB, error) {
+func NewLogDB(ctx context.Context, db, rdb *pgxpool.Pool, name string, datadb *DataDB) (*LogDB, error) {
 	txdb := &LogDB{
 		ctx:    ctx,
 		suffix: name,
 		db:     db,
 		rdb:    rdb,
+		datadb: datadb,
 	}
 
 	return txdb, nil
@@ -44,7 +46,6 @@ func (db *LogDB) CreateLogTable() error {
 		dest text NOT NULL,
 		value text NOT NULL,
 		data jsonb DEFAULT NULL,
-		extra_data jsonb DEFAULT NULL,
 		status text NOT NULL DEFAULT 'success'
 	);
 	`, db.suffix))
@@ -141,12 +142,24 @@ func (db *LogDB) AddLog(lg *engine.Log) error {
 
 	// insert log on conflict do nothing
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-	INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, extra_data, status, created_at, updated_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+	INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, status, created_at, updated_at)
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	ON CONFLICT (hash) DO NOTHING
-	`, db.suffix), lg.Hash, lg.TxHash, lg.Nonce, lg.Sender, lg.To, lg.Value.String(), lg.Data, lg.ExtraData, lg.Status, lg.CreatedAt, lg.UpdatedAt)
+	`, db.suffix), lg.Hash, lg.TxHash, lg.Nonce, lg.Sender, lg.To, lg.Value.String(), lg.Data, lg.Status, lg.CreatedAt, lg.UpdatedAt)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	// If ExtraData exists, store it in the data table
+	if lg.ExtraData != nil {
+		err = db.datadb.UpsertData(lg.Hash, lg.ExtraData)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddLogs adds a list of logs dest the db
@@ -154,8 +167,8 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 
 	for _, t := range lg {
 		_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
-			INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, extra_data, status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (hash) DO UPDATE SET
 				tx_hash = EXCLUDED.tx_hash,
 				nonce = EXCLUDED.nonce,
@@ -166,13 +179,20 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 				dest = EXCLUDED.dest,
 				value = EXCLUDED.value,
 				data = COALESCE(EXCLUDED.data, t_logs_%s.data),
-				extra_data = COALESCE(EXCLUDED.extra_data, t_logs_%s.extra_data),
 				status = EXCLUDED.status,
 				created_at = EXCLUDED.created_at,
 				updated_at = EXCLUDED.updated_at
-			`, db.suffix, db.suffix, db.suffix, db.suffix, db.suffix), t.Hash, t.TxHash, t.Nonce, t.Sender, t.To, t.Value.String(), t.Data, t.ExtraData, t.Status, t.CreatedAt, t.UpdatedAt)
+			`, db.suffix, db.suffix, db.suffix, db.suffix), t.Hash, t.TxHash, t.Nonce, t.Sender, t.To, t.Value.String(), t.Data, t.Status, t.CreatedAt, t.UpdatedAt)
 		if err != nil {
 			return err
+		}
+
+		// If ExtraData exists, store it in the data table
+		if t.ExtraData != nil {
+			err = db.datadb.UpsertData(t.Hash, t.ExtraData)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -215,18 +235,24 @@ func (db *LogDB) GetLog(hash string) (*engine.Log, error) {
 	var value string
 
 	row := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
 		FROM t_logs_%s
 		WHERE hash = $1
 		`, db.suffix), hash)
 
-	err := row.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+	err := row.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Value = new(big.Int)
 	log.Value.SetString(value, 10)
+
+	// Fetch extra data if it exists
+	extraData, err := db.datadb.GetData(hash)
+	if err == nil { // If there's no error, set the extra data
+		log.ExtraData = extraData
+	}
 
 	return &log, nil
 }
@@ -236,7 +262,7 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-	SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, extra_data, status
+	SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
 	FROM t_logs_%s
 	WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
 	ORDER BY created_at DESC
@@ -259,7 +285,7 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 		var log engine.Log
 		var value string
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +304,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
 		FROM t_logs_%s
 		WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
 		`, db.suffix)
@@ -302,7 +328,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, extra_data, status
+				SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
 				FROM t_logs_%s
 				WHERE dest = $%d AND data->>'topic' = $%d AND created_at <= $%d
 				`, db.suffix, len(args)+1, len(args)+2, len(args)+3)
@@ -342,7 +368,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 		var log engine.Log
 		var value string
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 		if err != nil {
 			return nil, err
 		}
@@ -361,7 +387,7 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
 		FROM t_logs_%s
 		WHERE dest = $1 AND data->>'topic' = $2 AND created_at >= $3
 		`, db.suffix)
@@ -405,7 +431,7 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 		var log engine.Log
 		var value string
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 		if err != nil {
 			return nil, err
 		}
@@ -424,7 +450,7 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, extra_data, status
+		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
 		FROM t_logs_%s
 		WHERE dest = $1 AND created_at >= $2
 		`, db.suffix)
@@ -447,7 +473,7 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, extra_data, status
+				SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
 				FROM t_logs_%s
 				WHERE dest = $%d AND created_at >= $%d
 				`, db.suffix, len(args)+1, len(args)+2)
@@ -487,7 +513,7 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 		var log engine.Log
 		var value string
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 		if err != nil {
 			return nil, err
 		}
@@ -524,7 +550,7 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 			VALUES
 			%s
 		)
-		SELECT lg.hash, tx_hash, created_at, nonce, sender, dest, value, data, extra_data, status
+		SELECT lg.hash, tx_hash, created_at, nonce, sender, dest, value, data, status
 		FROM t_logs_%s lg
 		JOIN b 
 		ON lg.hash = b.hash;
@@ -547,7 +573,7 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 		var log engine.Log
 		var value string
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.ExtraData, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
 		if err != nil {
 			return nil, err
 		}
