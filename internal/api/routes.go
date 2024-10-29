@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/citizenwallet/engine/internal/accounts"
 	"github.com/citizenwallet/engine/internal/bucket"
 	"github.com/citizenwallet/engine/internal/chain"
 	"github.com/citizenwallet/engine/internal/events"
@@ -48,6 +49,7 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 	ch := chain.NewService(s.evm, s.chainID)
 	pr := profiles.NewService(b, s.evm)
 	pu := push.NewService(s.db)
+	acc := accounts.NewService(s.evm, s.db)
 
 	// configure routes
 	cr.Route("/version", func(cr chi.Router) {
@@ -60,7 +62,11 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 	// })
 
 	cr.Route("/v1", func(cr chi.Router) {
-		// TODO: get a profile json by address
+		// accounts
+		cr.Route("/accounts", func(cr chi.Router) {
+			cr.Get("/{acc_addr}/exists", acc.Exists)
+		})
+
 		// profiles
 		cr.Route("/profiles", func(cr chi.Router) {
 			cr.Route("/{contract_address}", func(cr chi.Router) {
