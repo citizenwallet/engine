@@ -141,10 +141,8 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	dataFilters := engine.ParseJSONBFilters(r.URL.Query(), "data")
-
 	// get logs from db
-	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, dataFilters, limit, offset)
+	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

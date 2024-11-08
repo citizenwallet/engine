@@ -388,7 +388,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 }
 
 // GetAllNewLogs returns the logs for a given from_addr or to_addr from a given date
-func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.Time, dataFilters map[string]any, limit, offset int) ([]*engine.Log, error) {
+func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.Time, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
@@ -404,20 +404,6 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 		ORDER BY created_at DESC
 		LIMIT $4 OFFSET $5
 		`
-	if len(dataFilters) > 0 {
-		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
-
-		query += `AND `
-		query += topicQuery
-
-		args = append(args, topicArgs...)
-
-		argsLength := len(args)
-
-		orderLimit = fmt.Sprintf(`
-			ORDER BY created_at DESC LIMIT $%d OFFSET $%d
-			`, argsLength+1, argsLength+2)
-	}
 
 	args = append(args, limit, offset)
 
