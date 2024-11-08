@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"time"
@@ -233,26 +234,23 @@ func (db *LogDB) RemoveOldInProgressLogs() error {
 func (db *LogDB) GetLog(hash string) (*engine.Log, error) {
 	var log engine.Log
 	var value string
+	var extraData *json.RawMessage
 
 	row := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
-		FROM t_logs_%s
-		WHERE hash = $1
-		`, db.suffix), hash)
+		SELECT l.hash, l.tx_hash, l.created_at, l.updated_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+		FROM t_logs_%s l
+		LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+		WHERE l.hash = $1
+		`, db.suffix, db.suffix), hash)
 
-	err := row.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+	err := row.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 	if err != nil {
 		return nil, err
 	}
 
 	log.Value = new(big.Int)
 	log.Value.SetString(value, 10)
-
-	// Fetch extra data if it exists
-	extraData, err := db.datadb.GetData(hash)
-	if err == nil { // If there's no error, set the extra data
-		log.ExtraData = extraData
-	}
+	log.ExtraData = extraData
 
 	return &log, nil
 }
@@ -262,12 +260,13 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-	SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
-	FROM t_logs_%s
-	WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
-	ORDER BY created_at DESC
+	SELECT l.hash, l.tx_hash, l.created_at, l.updated_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+	FROM t_logs_%s l
+	LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+	WHERE l.dest = $1 AND l.data->>'topic' = $2 AND l.created_at <= $3
+	ORDER BY l.created_at DESC
 	LIMIT $4 OFFSET $5
-	`, db.suffix)
+	`, db.suffix, db.suffix)
 
 	args := []any{contract, signature, maxDate, limit, offset}
 
@@ -284,14 +283,16 @@ func (db *LogDB) GetAllPaginatedLogs(contract string, signature string, maxDate 
 	for rows.Next() {
 		var log engine.Log
 		var value string
+		var extraData *json.RawMessage
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Value = new(big.Int)
 		log.Value.SetString(value, 10)
+		log.ExtraData = extraData
 
 		logs = append(logs, &log)
 	}
@@ -304,10 +305,11 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
-		FROM t_logs_%s
-		WHERE dest = $1 AND data->>'topic' = $2 AND created_at <= $3
-		`, db.suffix)
+		SELECT l.hash, l.tx_hash, l.created_at, l.updated_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+		FROM t_logs_%s l
+		LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+		WHERE l.dest = $1 AND l.data->>'topic' = $2 AND l.created_at <= $3
+		`, db.suffix, db.suffix)
 
 	args := []any{contract, signature, maxDate}
 
@@ -328,10 +330,11 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				SELECT hash, tx_hash, created_at, updated_at, nonce, sender, dest, value, data, status
-				FROM t_logs_%s
-				WHERE dest = $%d AND data->>'topic' = $%d AND created_at <= $%d
-				`, db.suffix, len(args)+1, len(args)+2, len(args)+3)
+				SELECT l.hash, l.tx_hash, l.created_at, l.updated_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+				FROM t_logs_%s l
+				LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+				WHERE l.dest = $%d AND l.data->>'topic' = $%d AND l.created_at <= $%d
+				`, db.suffix, db.suffix, len(args)+1, len(args)+2, len(args)+3)
 
 			args = append(args, contract, signature, maxDate)
 
@@ -367,14 +370,16 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	for rows.Next() {
 		var log engine.Log
 		var value string
+		var extraData *json.RawMessage
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.UpdatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Value = new(big.Int)
 		log.Value.SetString(value, 10)
+		log.ExtraData = extraData
 
 		logs = append(logs, &log)
 	}
@@ -382,15 +387,16 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	return logs, nil
 }
 
-// GetNewLogs returns the logs for a given from_addr or to_addr from a given date
+// GetAllNewLogs returns the logs for a given from_addr or to_addr from a given date
 func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.Time, dataFilters map[string]any, limit, offset int) ([]*engine.Log, error) {
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
-		FROM t_logs_%s
-		WHERE dest = $1 AND data->>'topic' = $2 AND created_at >= $3
-		`, db.suffix)
+		SELECT l.hash, l.tx_hash, l.created_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+		FROM t_logs_%s l
+		LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+		WHERE l.dest = $1 AND l.data->>'topic' = $2 AND l.created_at >= $3
+		`, db.suffix, db.suffix)
 
 	args := []any{contract, signature, fromDate}
 
@@ -430,14 +436,16 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 	for rows.Next() {
 		var log engine.Log
 		var value string
+		var extraData *json.RawMessage
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Value = new(big.Int)
 		log.Value.SetString(value, 10)
+		log.ExtraData = extraData
 
 		logs = append(logs, &log)
 	}
@@ -450,10 +458,11 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 	logs := []*engine.Log{}
 
 	query := fmt.Sprintf(`
-		SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
-		FROM t_logs_%s
-		WHERE dest = $1 AND created_at >= $2
-		`, db.suffix)
+		SELECT l.hash, l.tx_hash, l.created_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+		FROM t_logs_%s l
+		LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+		WHERE l.dest = $1 AND l.created_at >= $2
+		`, db.suffix, db.suffix)
 
 	args := []any{contract, fromDate}
 
@@ -512,14 +521,16 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 	for rows.Next() {
 		var log engine.Log
 		var value string
+		var extraData *json.RawMessage
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Value = new(big.Int)
 		log.Value.SetString(value, 10)
+		log.ExtraData = extraData
 
 		logs = append(logs, &log)
 	}
@@ -550,11 +561,11 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 			VALUES
 			%s
 		)
-		SELECT lg.hash, tx_hash, created_at, nonce, sender, dest, value, data, status
+		SELECT lg.hash, lg.tx_hash, lg.created_at, lg.nonce, lg.sender, lg.dest, lg.value, lg.data, lg.status, d.data as extra_data
 		FROM t_logs_%s lg
-		JOIN b 
-		ON lg.hash = b.hash;
-		`, hashStr, db.suffix))
+		JOIN b ON lg.hash = b.hash
+		LEFT JOIN t_logs_data_%s d ON lg.hash = d.hash;
+		`, hashStr, db.suffix, db.suffix))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return txs, nil
@@ -572,14 +583,16 @@ func (db *LogDB) UpdateLogsWithDB(txs []*engine.Log) ([]*engine.Log, error) {
 	for rows.Next() {
 		var log engine.Log
 		var value string
+		var extraData *json.RawMessage
 
-		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status)
+		err := rows.Scan(&log.Hash, &log.TxHash, &log.CreatedAt, &log.Nonce, &log.Sender, &log.To, &value, &log.Data, &log.Status, &extraData)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Value = new(big.Int)
 		log.Value.SetString(value, 10)
+		log.ExtraData = extraData
 
 		// check if exists
 		if _, ok := mtxs[log.Hash]; !ok {
