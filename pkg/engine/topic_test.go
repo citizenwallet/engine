@@ -271,21 +271,21 @@ func TestGenerateJSONBQuery(t *testing.T) {
 			name:      "Single key-value pair",
 			start:     1,
 			data:      map[string]any{"name": "John"},
-			wantQuery: "data->>'name' = $1",
+			wantQuery: "l.data->>'name' = $1",
 			wantArgs:  []any{"John"},
 		},
 		{
 			name:      "Multiple key-value pairs",
 			start:     2,
 			data:      map[string]any{"name": "John", "age": 30, "city": "New York"},
-			wantQuery: "data->>'name' = $2 AND data->>'age' = $3 AND data->>'city' = $4",
+			wantQuery: "l.data->>'name' = $2 AND l.data->>'age' = $3 AND l.data->>'city' = $4",
 			wantArgs:  []any{"John", 30, "New York"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotQuery, gotArgs := GenerateJSONBQuery(tt.start, tt.data)
+			gotQuery, gotArgs := GenerateJSONBQuery("l.", tt.start, tt.data)
 			if gotQuery != tt.wantQuery {
 				t.Errorf("GenerateJSONBQuery() gotQuery = %v, want %v", gotQuery, tt.wantQuery)
 			}

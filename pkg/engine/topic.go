@@ -230,7 +230,7 @@ func ParseJSONBFilters(query url.Values, prefix string) map[string]any {
 	return jsonFilter
 }
 
-func GenerateJSONBQuery(start int, data map[string]any) (string, []any) {
+func GenerateJSONBQuery(prefix string, start int, data map[string]any) (string, []any) {
 	var query strings.Builder
 	args := make([]any, 0, len(data))
 
@@ -239,7 +239,7 @@ func GenerateJSONBQuery(start int, data map[string]any) (string, []any) {
 		if i > start {
 			query.WriteString(" AND ")
 		}
-		query.WriteString(fmt.Sprintf("data->>'%s' = $%d", key, i))
+		query.WriteString(fmt.Sprintf("%sdata->>'%s' = $%d", prefix, key, i))
 		args = append(args, value)
 		i++
 	}

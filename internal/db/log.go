@@ -314,12 +314,12 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 	args := []any{contract, signature, maxDate}
 
 	orderLimit := `
-		ORDER BY created_at DESC
+		ORDER BY l.created_at DESC
 		LIMIT $4 OFFSET $5
 		`
 
 	if len(dataFilters) > 0 {
-		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
+		topicQuery, topicArgs := engine.GenerateJSONBQuery("l.", len(args)+1, dataFilters)
 
 		query += `AND `
 		query += topicQuery
@@ -338,7 +338,7 @@ func (db *LogDB) GetPaginatedLogs(contract string, signature string, maxDate tim
 
 			args = append(args, contract, signature, maxDate)
 
-			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery(len(args)+1, dataFilters2)
+			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery("l.", len(args)+1, dataFilters2)
 
 			query += `AND `
 			query += topicQuery2
@@ -401,7 +401,7 @@ func (db *LogDB) GetAllNewLogs(contract string, signature string, fromDate time.
 	args := []any{contract, signature, fromDate}
 
 	orderLimit := `
-		ORDER BY created_at DESC
+		ORDER BY l.created_at DESC
 		LIMIT $4 OFFSET $5
 		`
 
@@ -453,11 +453,11 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 	args := []any{contract, fromDate}
 
 	orderLimit := `
-		ORDER BY created_at DESC
+		ORDER BY l.created_at DESC
 		LIMIT $3 OFFSET $4
 		`
 	if len(dataFilters) > 0 {
-		topicQuery, topicArgs := engine.GenerateJSONBQuery(len(args)+1, dataFilters)
+		topicQuery, topicArgs := engine.GenerateJSONBQuery("l.", len(args)+1, dataFilters)
 
 		query += `AND `
 		query += topicQuery
@@ -475,7 +475,7 @@ func (db *LogDB) GetNewLogs(contract string, signature string, fromDate time.Tim
 
 			args = append(args, contract, fromDate)
 
-			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery(len(args)+1, dataFilters2)
+			topicQuery2, topicArgs2 := engine.GenerateJSONBQuery("l.", len(args)+1, dataFilters2)
 
 			query += `AND `
 			query += topicQuery2
