@@ -161,6 +161,10 @@ func (s *Service) Sponsor(r *http.Request) (any, error) {
 		}
 	}
 
+	if len(userop.CallData) < 4 {
+		return nil, errors.New("error call data is too short")
+	}
+
 	// verify the calldata, it should only be allowed to contain the function signatures we allow
 	funcSig := userop.CallData[:4]
 	if !bytes.Equal(funcSig, engine.FuncSigSingle) && !bytes.Equal(funcSig, engine.FuncSigBatch) && !bytes.Equal(funcSig, engine.FuncSigSafeExecFromModule) {
