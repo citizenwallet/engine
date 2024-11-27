@@ -16,6 +16,8 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -562,25 +564,50 @@ func verify1271Signature(evm engine.EVMRequester, req signedBody, accaddr common
 		sig[crypto.RecoveryIDOffset] += 27
 	}
 
+	// Create call opts with the desired sender address
+	callOpts := &bind.CallOpts{
+		From:    accaddr,
+		Context: context.Background(),
+	}
+
 	// verify the signature
-	v, err := acc.IsValidSignature(nil, h32, sig)
+	v, err := acc.IsValidSignature(callOpts, h32, sig)
 	if err == nil {
 		return v == MAGIC_VALUE
 	}
 
 	// an error occured, check if it is because the method is not implemented
 	e, ok := err.(rpc.Error)
-	if ok && e.ErrorCode() != -32000 {
-		return false
+	if ok && e.ErrorCode() == -32000 {
+		// not implemented, check the owner manually
+		owner, err := acc.Owner(nil)
+		if err != nil {
+			return false
+		}
+
+		return owner == address
 	}
 
-	// not implemented, check the owner manually
-	owner, err := acc.Owner(nil)
+	// check the Safe for valid signature
+	safeABI, err := abi.JSON(strings.NewReader(engine.SafeAbi))
 	if err != nil {
 		return false
 	}
 
-	return owner == address
+	contract := bind.NewBoundContract(accaddr, safeABI, evm.Backend(), evm.Backend(), evm.Backend())
+
+	var result []interface{}
+	err = contract.Call(callOpts, &result, "isOwner", address)
+	if err != nil {
+		return false
+	}
+
+	isOwner, ok := result[0].(bool)
+	if !ok {
+		return false
+	}
+
+	return isOwner
 }
 
 // compactSignature gets the v, r, and s values and compacts them into a 65 byte array
