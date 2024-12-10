@@ -211,6 +211,12 @@ func (cm *ConnectionPool) BroadcastMessage(query string, message []byte) {
 	cm.mutex.Lock()
 	clients := make([]*Client, 0, len(cm.clients[query]))
 	for client := range cm.clients[query] {
+		if _, ok := <-client.send; !ok {
+			// check if the client is still open
+			cm.unregister <- client
+			continue
+		}
+
 		clients = append(clients, client)
 	}
 	cm.mutex.Unlock()
