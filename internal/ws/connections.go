@@ -221,6 +221,7 @@ func (cm *ConnectionPool) BroadcastMessage(query string, message []byte) {
 		case client.send <- message:
 			// Message sent successfully
 		case _, ok := <-client.send:
+			println("channel closed", ok)
 			// If channel is closed,
 			// the client should be unregistered
 			if !ok {
