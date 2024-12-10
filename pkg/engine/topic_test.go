@@ -23,6 +23,11 @@ func TestTopicsMarshalJSON(t *testing.T) {
 			{Name: "to", Type: "address", Value: common.HexToAddress("0x1234567890123456789012345678901234567890")},
 			{Name: "tokenId", Type: "uint256", Value: big.NewInt(1)},
 		},
+		{ // ERC20 Transfer
+			{Name: "from", Type: "address", Value: common.HexToAddress("0x0000000000000000000000000000000000000000")},
+			{Name: "to", Type: "address", Value: common.HexToAddress("0x1234567890123456789012345678901234567890")},
+			{Name: "value", Type: "uint256", Value: big.NewInt(1000000)},
+		},
 	}
 
 	expectedJSON := []string{
@@ -35,6 +40,11 @@ func TestTopicsMarshalJSON(t *testing.T) {
 			"from": "0x1234567890123456789012345678901234567890",
 			"to": "0x1234567890123456789012345678901234567890",
 			"tokenId": "1"
+		}`,
+		`{
+			"from": "0x0000000000000000000000000000000000000000",
+			"to": "0x1234567890123456789012345678901234567890",
+			"value": "1000000"
 		}`,
 	}
 
