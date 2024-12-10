@@ -211,12 +211,6 @@ func (cm *ConnectionPool) BroadcastMessage(query string, message []byte) {
 	cm.mutex.Lock()
 	clients := make([]*Client, 0, len(cm.clients[query]))
 	for client := range cm.clients[query] {
-		if _, ok := <-client.send; !ok {
-			// check if the client is still open
-			cm.unregister <- client
-			continue
-		}
-
 		clients = append(clients, client)
 	}
 	cm.mutex.Unlock()
@@ -226,6 +220,14 @@ func (cm *ConnectionPool) BroadcastMessage(query string, message []byte) {
 		select {
 		case client.send <- message:
 			// Message sent successfully
+		case _, ok := <-client.send:
+			// If channel is closed,
+			// the client should be unregistered
+			if !ok {
+				go func(c *Client) {
+					cm.unregister <- c
+				}(client)
+			}
 		default:
 			// Client's send channel is full, unregister it
 			go func(c *Client) {
