@@ -19,7 +19,6 @@ import (
 )
 
 const (
-	contractAddress = "0x5815E61eF72c9E6107b5c5A05FD121F334f7a7f1"
 	transferTopic   = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 	batchSize       = 1000
 	migrationSuffix = "migration"
@@ -28,7 +27,12 @@ const (
 func main() {
 	// Parse command-line flags
 	env := flag.String("env", ".env", "path to .env file")
+	contractAddress := flag.String("contract", "", "contract address")
 	flag.Parse()
+
+	if *contractAddress == "" {
+		log.Fatal("contract address is required")
+	}
 
 	// Load configuration from .env file
 	ctx := context.Background()
@@ -62,7 +66,7 @@ func main() {
 	defer d.Close()
 
 	// Perform migration
-	err = migrateData(sqliteDB, d.LogDB, fmt.Sprintf("%s_%s", chid.String(), contractAddress))
+	err = migrateData(sqliteDB, d.LogDB, chid, *contractAddress)
 	if err != nil {
 		log.Fatalf("Error during migration: %v", err)
 	}
@@ -70,10 +74,10 @@ func main() {
 	log.Println("Migration completed successfully")
 }
 
-func migrateData(sqliteDB *sql.DB, logDB *db.LogDB, suffix string) error {
+func migrateData(sqliteDB *sql.DB, logDB *db.LogDB, chid *big.Int, contractAddress string) error {
 	offset := 0
 	for {
-		transfers, err := getTransfers(sqliteDB, offset, batchSize, suffix)
+		transfers, err := getTransfers(sqliteDB, offset, batchSize, fmt.Sprintf("%s_%s", chid.String(), contractAddress))
 		if err != nil {
 			return fmt.Errorf("error getting transfers: %v", err)
 		}
@@ -82,7 +86,7 @@ func migrateData(sqliteDB *sql.DB, logDB *db.LogDB, suffix string) error {
 			break
 		}
 
-		logs := convertTransfersToLogs(transfers)
+		logs := convertTransfersToLogs(transfers, contractAddress)
 
 		err = logDB.AddLogs(logs)
 		if err != nil {
@@ -126,7 +130,7 @@ func getTransfers(db *sql.DB, offset, limit int, suffix string) ([]*mtransfer.Tr
 	return transfers, nil
 }
 
-func convertTransfersToLogs(transfers []*mtransfer.Transfer) []*engine.Log {
+func convertTransfersToLogs(transfers []*mtransfer.Transfer, contractAddress string) []*engine.Log {
 	var logs []*engine.Log
 	for _, t := range transfers {
 		data := map[string]interface{}{
