@@ -59,7 +59,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	d, err := db.NewDB(chid, conf.DBSecret, conf.DBUser, conf.DBPassword, conf.DBName, conf.DBPort, conf.DBHost, conf.DBReaderHost)
+	d, err := db.NewDB(chid, conf.DBSecret, conf.DBUser, conf.DBPassword, conf.DBName, conf.DBPort,
+		"0.0.0.0", "0.0.0.0")
 	if err != nil {
 		log.Fatal(err)
 	}
