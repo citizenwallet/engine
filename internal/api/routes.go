@@ -42,7 +42,7 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 	// instantiate handlers
 	v := version.NewService()
 	l := logs.NewService(s.chainID, s.db, s.evm)
-	events := events.NewHandlers(s.pools)
+	events := events.NewHandlers(s.db, s.pools)
 	rpc := rpc.NewHandlers()
 	pm := paymaster.NewService(s.evm, s.db)
 	uop := userop.NewService(s.evm, s.db, s.userOpQueue, s.chainID)

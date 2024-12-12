@@ -63,6 +63,18 @@ func (db *EventDB) CreateEventsTableIndexes(suffix string) error {
 	return nil
 }
 
+// EventExists checks if an event exists in the db
+func (db *EventDB) EventExists(contract string) (bool, error) {
+	var exists bool
+	err := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
+	SELECT EXISTS (SELECT 1 FROM t_events_%s WHERE contract = $1)
+	`, db.suffix), contract).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 // GetEvent gets an event from the db by contract and signature
 func (db *EventDB) GetEvent(contract string, signature string) (*engine.Event, error) {
 	var event engine.Event
