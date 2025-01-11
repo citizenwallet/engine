@@ -59,7 +59,6 @@ func (t *Log) GenerateUniqueHash() string {
 	buf := new(bytes.Buffer)
 
 	// Write each value to the buffer as bytes
-	buf.Write(common.FromHex(t.To))
 	// Convert t.Value to a fixed-length byte representation
 	valueBytes := t.Value.Bytes()
 	buf.Write(common.LeftPadBytes(valueBytes, 32))
