@@ -577,11 +577,12 @@ func verify1271Signature(evm engine.EVMRequester, req signedBody, accaddr common
 	}
 
 	// an error occured, check if it is because the method is not implemented
-	e, ok := err.(rpc.Error)
-	if ok && e.ErrorCode() == -32000 {
-		// not implemented, check the owner manually
+	_, ok := err.(rpc.Error)
+	if !ok {
+		// not an rpc error, try a manual check
 		owner, err := acc.Owner(nil)
 		if err != nil {
+			println(err.Error())
 			return false
 		}
 
