@@ -57,9 +57,9 @@ func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// parse signature from url query
-	signature := chi.URLParam(r, "signature")
-	if signature == "" {
+	// parse topic from url query
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -88,7 +88,7 @@ func (s *Service) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get logs from db
-	logs, err := s.db.LogDB.GetAllPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, limit, offset)
+	logs, err := s.db.LogDB.GetAllPaginatedLogs(com.ChecksumAddress(contractAddr), topic, maxDate, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -111,9 +111,9 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// parse signature from url query
-	signature := chi.URLParam(r, "signature")
-	if signature == "" {
+	// parse topic from url query
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -142,7 +142,7 @@ func (s *Service) GetAllNew(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// get logs from db
-	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, limit, offset)
+	logs, err := s.db.LogDB.GetAllNewLogs(com.ChecksumAddress(contractAddr), topic, fromDate, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -179,9 +179,9 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// parse signature from url query
-	signature := chi.URLParam(r, "signature")
-	if signature == "" {
+	// parse topic from url query
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -214,7 +214,7 @@ func (s *Service) Get(w http.ResponseWriter, r *http.Request) {
 	dataFilters2 := engine.ParseJSONBFilters(r.URL.Query(), "data2")
 
 	// get logs from db
-	logs, err := s.db.LogDB.GetPaginatedLogs(com.ChecksumAddress(contractAddr), signature, maxDate, dataFilters, dataFilters2, limit, offset) // TODO: add topics
+	logs, err := s.db.LogDB.GetPaginatedLogs(com.ChecksumAddress(contractAddr), topic, maxDate, dataFilters, dataFilters2, limit, offset) // TODO: add topics
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -237,9 +237,9 @@ func (s *Service) GetNew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// parse signature from url query
-	signature := chi.URLParam(r, "signature")
-	if signature == "" {
+	// parse topic from url query
+	topic := chi.URLParam(r, "topic")
+	if topic == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -272,7 +272,7 @@ func (s *Service) GetNew(w http.ResponseWriter, r *http.Request) {
 	dataFilters2 := engine.ParseJSONBFilters(r.URL.Query(), "data2")
 
 	// get logs from db
-	logs, err := s.db.LogDB.GetNewLogs(com.ChecksumAddress(contractAddr), signature, fromDate, dataFilters, dataFilters2, limit, offset)
+	logs, err := s.db.LogDB.GetNewLogs(com.ChecksumAddress(contractAddr), topic, fromDate, dataFilters, dataFilters2, limit, offset)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return

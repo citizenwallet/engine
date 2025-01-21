@@ -84,7 +84,7 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 
 		// logs
 		cr.Route("/logs/{contract_address}", func(cr chi.Router) {
-			cr.Route("/{signature}", func(cr chi.Router) {
+			cr.Route("/{topic}", func(cr chi.Router) {
 				cr.Get("/", l.Get)
 				cr.Get("/all", l.GetAll)
 
