@@ -468,10 +468,11 @@ func (db *LogDB) GetNewLogs(contract string, topic string, fromDate time.Time, d
 			// I'm being lazy here, could be dynamic
 			query += fmt.Sprintf(`
 				UNION ALL
-				SELECT hash, tx_hash, created_at, nonce, sender, dest, value, data, status
-				FROM t_logs_%s
-				WHERE dest = $%d AND l.data->>'topic' = $%d AND created_at >= $%d
-				`, db.suffix, len(args)+1, len(args)+2, len(args)+3)
+				SELECT l.hash, l.tx_hash, l.created_at, l.nonce, l.sender, l.dest, l.value, l.data, l.status, d.data as extra_data
+				FROM t_logs_%s l
+				LEFT JOIN t_logs_data_%s d ON l.hash = d.hash
+				WHERE l.dest = $%d AND l.data->>'topic' = $%d AND l.created_at >= $%d
+				`, db.suffix, db.suffix, len(args)+1, len(args)+2, len(args)+3)
 
 			args = append(args, contract, topic, fromDate)
 
