@@ -1,6 +1,9 @@
-# dApp Engine
+<h1 align="center">
+  <img style="height: 100px; width: 100px;" src="https://github.com/citizenwallet/indexer/blob/main/logos/logo.png" alt="citizen wallet logo"/><br/>
+  dApp Engine
+</h1>
 
-App Engine is a Go application designed to simplify and enhance blockchain interactions on EVM-compatible chains. It aims to create great user experiences on EVM-compatible blockchains by providing a unified solution for reading and writing data, as well as handling event-based interactions.
+dApp Engine is a Go application designed to simplify and enhance blockchain interactions on EVM-compatible chains. It aims to create great user experiences on EVM-compatible blockchains by providing a unified solution for reading and writing data, as well as handling event-based interactions.
 
 ## Purpose
 
