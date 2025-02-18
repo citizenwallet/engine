@@ -149,8 +149,13 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 		return nil, err
 	}
 
-	buffer := new(big.Int).Div(tip, big.NewInt(100))
+	// Ensure minimum priority fee of 1 GWEI (1000000000 wei)
+	minPriorityFee := big.NewInt(1000000000)
+	if tip.Cmp(minPriorityFee) < 0 {
+		tip = minPriorityFee
+	}
 
+	buffer := new(big.Int).Div(tip, big.NewInt(100))
 	maxPriorityFeePerGas := new(big.Int).Add(tip, buffer)
 
 	maxFeePerGas := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(baseFee, big.NewInt(2)))
