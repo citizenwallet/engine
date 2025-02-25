@@ -219,7 +219,6 @@ func (s *Service) Send(r *http.Request) (any, error) {
 
 	resp, err := message.WaitForResponse()
 	if err != nil {
-		println("error waiting for response", err.Error())
 		return nil, err
 	}
 

@@ -217,8 +217,8 @@ func (s *Service) Sponsor(r *http.Request) (any, error) {
 	}
 
 	// value in uint256
-	callValue, ok := callValues[1].(*big.Int)
-	if !ok || callValue.Cmp(big.NewInt(0)) != 0 {
+	_, ok = callValues[1].(*big.Int)
+	if !ok {
 		// shouldn't have any value
 		return nil, errors.New("error invalid call value")
 	}
@@ -449,8 +449,8 @@ func (s *Service) OOSponsor(r *http.Request) (any, error) {
 	}
 
 	// value in uint256
-	callValue, ok := callValues[1].(*big.Int)
-	if !ok || callValue.Cmp(big.NewInt(0)) != 0 {
+	_, ok = callValues[1].(*big.Int)
+	if !ok {
 		// shouldn't have any value
 		return nil, errors.New("error invalid call value")
 	}
