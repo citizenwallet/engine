@@ -107,6 +107,10 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 				"eth_getBlockByNumber":      ch.EthGetBlockByNumber,
 				"eth_maxPriorityFeePerGas":  ch.EthMaxPriorityFeePerGas,
 				"eth_getTransactionReceipt": ch.EthGetTransactionReceipt,
+				"eth_getTransactionCount":   ch.EthGetTransactionCount,
+				"eth_estimateGas":           ch.EthEstimateGas,
+				"eth_gasPrice":              ch.EthGasPrice,
+				"eth_sendRawTransaction":    ch.EthSendRawTransaction,
 			}))
 		})
 
