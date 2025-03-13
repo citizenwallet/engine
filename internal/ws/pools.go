@@ -24,8 +24,6 @@ func (p *ConnectionPools) Connect(w http.ResponseWriter, r *http.Request, topic 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	println("connect", topic)
-
 	if _, ok := p.pools[topic]; !ok || !p.pools[topic].IsOpen() {
 		p.pools[topic] = NewConnectionPool(topic)
 

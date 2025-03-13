@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -117,7 +118,7 @@ func (t *Log) GetPoolTopic() *string {
 		return nil
 	}
 
-	topic := fmt.Sprintf("%s/%s", t.To, v)
+	topic := strings.ToLower(fmt.Sprintf("%s/%s", t.To, v))
 
 	return &topic
 }

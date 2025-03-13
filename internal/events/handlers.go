@@ -3,6 +3,7 @@ package events
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ws"
@@ -29,11 +30,6 @@ func (h *Handlers) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	println(r.URL.RawQuery)
-
-	println("contract", contract)
-	println("topic", topic)
-
 	exists, err := h.db.EventDB.EventExists(contract)
 	if err != nil || !exists {
 		http.Error(w, "event does not exist", http.StatusNotFound)
@@ -42,5 +38,5 @@ func (h *Handlers) HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 	poolName := fmt.Sprintf("%s/%s", contract, topic)
 
-	h.pools.Connect(w, r, poolName)
+	h.pools.Connect(w, r, strings.ToLower(poolName))
 }
