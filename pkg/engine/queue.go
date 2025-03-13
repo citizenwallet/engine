@@ -67,13 +67,14 @@ type UserOpMessage struct {
 	UserOp     UserOp
 	Data       any
 	ExtraData  any
+	BumpGas    bool
 }
 
-func newMessage(id string, message any, response *chan MessageResponse) *Message {
+func NewMessage(id string, message any, retryCount int, response *chan MessageResponse) *Message {
 	return &Message{
 		ID:         id,
 		CreatedAt:  time.Now(),
-		RetryCount: 0,
+		RetryCount: retryCount,
 		Message:    message,
 		Response:   response,
 	}
@@ -90,5 +91,5 @@ func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp
 	}
 
 	respch := make(chan MessageResponse)
-	return newMessage(common.Bytes2Hex(userop.Signature), op, &respch)
+	return NewMessage(common.Bytes2Hex(userop.Signature), op, 0, &respch)
 }

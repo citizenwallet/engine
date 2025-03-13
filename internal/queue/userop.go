@@ -47,10 +47,10 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 	invalid = []engine.Message{}
 	errors = []error{}
 
-	messagesByEntryPoint := map[common.Address][]engine.Message{}
-	txmByEntryPoint := map[common.Address][]engine.UserOpMessage{}
+	messagesBySponsor := map[common.Address][]engine.Message{}
+	txmBySponsor := map[common.Address][]engine.UserOpMessage{}
 
-	// first organize messages by txm.EntryPoint
+	// first organize messages by sponsors
 	for _, message := range messages {
 		// Type assertion to check if the msgs... is of type engine.UserOpMessage
 		txm, ok := message.Message.(engine.UserOpMessage)
@@ -61,14 +61,36 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			continue
 		}
 
-		messagesByEntryPoint[txm.EntryPoint] = append(messagesByEntryPoint[txm.EntryPoint], message)
-		txmByEntryPoint[txm.EntryPoint] = append(txmByEntryPoint[txm.EntryPoint], txm)
+		// Fetch the sponsor's corresponding private key from the database
+		sponsorKey, err := s.db.SponsorDB.GetSponsor(txm.Paymaster.Hex())
+		if err != nil {
+			invalid = append(invalid, message)
+			errors = append(errors, err)
+			continue
+		}
+
+		// Generate ecdsa.PrivateKey from bytes
+		privateKey, err := comm.HexToPrivateKey(sponsorKey.PrivateKey)
+		if err != nil {
+			invalid = append(invalid, message)
+			errors = append(errors, err)
+			continue
+		}
+
+		// Get the public key from the private key
+		publicKey := privateKey.Public().(*ecdsa.PublicKey)
+
+		// Convert the public key to an Ethereum address
+		sponsor := crypto.PubkeyToAddress(*publicKey)
+
+		messagesBySponsor[sponsor] = append(messagesBySponsor[sponsor], message)
+		txmBySponsor[sponsor] = append(txmBySponsor[sponsor], txm)
 	}
 
-	// go through each entry point and process the messages
-	for entrypoint, txms := range txmByEntryPoint {
+	// go through each sponsor and process the messages
+	for sponsor, txms := range txmBySponsor {
 		sampleTxm := txms[0] // use the first txm to get information we need to process the messages
-		msgs := messagesByEntryPoint[entrypoint]
+		msgs := messagesBySponsor[sponsor]
 
 		// Fetch the sponsor's corresponding private key from the database
 		sponsorKey, err := s.db.SponsorDB.GetSponsor(sampleTxm.Paymaster.Hex())
@@ -92,12 +114,6 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			continue
 		}
 
-		// Get the public key from the private key
-		publicKey := privateKey.Public().(*ecdsa.PublicKey)
-
-		// Convert the public key to an Ethereum address
-		sponsor := crypto.PubkeyToAddress(*publicKey)
-
 		// Get the nonce for the sponsor's address
 		nonce, err := s.evm.NonceAt(context.Background(), sponsor, nil)
 		if err != nil {
@@ -109,7 +125,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 		}
 
 		// Get the in progress transactions for the entrypoint and increment the nonce
-		inProgress := s.inProgress[entrypoint]
+		inProgress := s.inProgress[sponsor]
 		nonce += uint64(len(inProgress))
 
 		// Parse the contract ABI
@@ -139,7 +155,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 		}
 
 		// Create a new transaction
-		tx, err := s.evm.NewTx(nonce, sponsor, sampleTxm.EntryPoint, data, false)
+		tx, err := s.evm.NewTx(nonce, sponsor, sampleTxm.EntryPoint, data, sampleTxm.BumpGas)
 		if err != nil {
 			invalid = append(invalid, msgs...)
 			for range msgs {
@@ -162,7 +178,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 		// update inProgress
 		s.mu.Lock()
-		s.inProgress[entrypoint] = append(s.inProgress[entrypoint], signedTxHash)
+		s.inProgress[sponsor] = append(s.inProgress[sponsor], signedTxHash)
 		s.mu.Unlock()
 
 		insertedLogs := map[common.Address][]*engine.Log{}
@@ -256,6 +272,38 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 		if err != nil {
 			// If there's an error, check if it's an RPC error
 			e, ok := err.(rpc.Error)
+			if ok && e.ErrorCode() == -32010 {
+				// If the error code is -32010, it means that a tx needs to be replaced
+				for _, logs := range insertedLogs {
+					for _, log := range logs {
+						ldb.RemoveLog(log.Hash)
+
+						// broadcast updates to connected clients
+						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
+					}
+				}
+
+				for _, msg := range msgs {
+					txm, ok := msg.Message.(engine.UserOpMessage)
+					if ok {
+						txm.BumpGas = true
+						println("bumping gas for new message:", txm.BumpGas)
+						invalid = append(invalid, *engine.NewMessage(msg.ID, txm, msg.RetryCount, msg.Response))
+					}
+				}
+
+				for range msgs {
+					errors = append(errors, err)
+				}
+
+				// remove from inProgress
+				s.mu.Lock()
+				s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
+					return s != signedTxHash
+				})
+				s.mu.Unlock()
+				continue
+			}
 			if ok && e.ErrorCode() != -32000 {
 				// If it's an RPC error and the error code is not -32000, remove the sending transfer and return the error
 				for _, logs := range insertedLogs {
@@ -274,7 +322,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 				// remove from inProgress
 				s.mu.Lock()
-				s.inProgress[entrypoint] = comm.Filter(s.inProgress[entrypoint], func(s string) bool {
+				s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
 					return s != signedTxHash
 				})
 				s.mu.Unlock()
@@ -299,7 +347,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 				// remove from inProgress
 				s.mu.Lock()
-				s.inProgress[entrypoint] = comm.Filter(s.inProgress[entrypoint], func(s string) bool {
+				s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
 					return s != signedTxHash
 				})
 				s.mu.Unlock()
@@ -324,7 +372,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 			// remove from inProgress
 			s.mu.Lock()
-			s.inProgress[entrypoint] = comm.Filter(s.inProgress[entrypoint], func(s string) bool {
+			s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
 				return s != signedTxHash
 			})
 			s.mu.Unlock()
@@ -364,7 +412,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 			// remove from inProgress
 			s.mu.Lock()
-			s.inProgress[entrypoint] = comm.Filter(s.inProgress[entrypoint], func(s string) bool {
+			s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
 				return s != signedTxHash
 			})
 			s.mu.Unlock()
