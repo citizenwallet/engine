@@ -134,19 +134,31 @@ func (e *EthService) EstimateGasPrice() (*big.Int, error) {
 }
 
 func (e *EthService) EstimateGasLimit(msg ethereum.CallMsg) (uint64, error) {
-	return e.client.EstimateGas(e.ctx, msg)
+	gasLimit, err := e.client.EstimateGas(e.ctx, msg)
+	if err != nil {
+		// Log more details about the error
+		fmt.Printf("EstimateGasLimit error type: %T\n", err)
+		fmt.Printf("EstimateGasLimit error details: %+v\n", err)
+
+		// Try to extract more information if it's an RPC error
+		if rpcErr, ok := err.(rpc.Error); ok {
+			fmt.Printf("RPC error code: %d\n", rpcErr.ErrorCode())
+			fmt.Printf("RPC error message: %s\n", rpcErr.Error())
+		}
+	}
+	return gasLimit, err
 }
 
 func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, extraGas bool) (*types.Transaction, error) {
 	baseFee, err := e.BaseFee()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting base fee: %w", err)
 	}
 
 	// Set the priority fee per gas (miner tip)
 	tip, err := e.MaxPriorityFeePerGas()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting max priority fee: %w", err)
 	}
 
 	// Ensure minimum priority fee of 1 GWEI (1000000000 wei)
@@ -172,7 +184,7 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 
 	gasLimit, err := e.EstimateGasLimit(msg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gas estimation failed: %w", err)
 	}
 
 	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(10)))
