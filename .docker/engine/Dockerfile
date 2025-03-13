@@ -43,4 +43,4 @@ COPY --from=builder /engine/.env /engine
 # define the command to be run on launch
 ENTRYPOINT ["/engine/main"]
 
-CMD ["-env", "/engine/.env"]
+CMD ["-env", "/engine/.env", "-notify"]

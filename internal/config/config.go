@@ -22,6 +22,7 @@ type Config struct {
 	PinataBaseURL   string `env:"PINATA_BASE_URL"`
 	PinataAPIKey    string `env:"PINATA_API_KEY"`
 	PinataAPISecret string `env:"PINATA_API_SECRET"`
+	DiscordURL      string `env:"DISCORD_URL"`
 }
 
 func New(ctx context.Context, envpath string) (*Config, error) {

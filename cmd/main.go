@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 
 	"github.com/citizenwallet/engine/internal/api"
@@ -12,6 +13,7 @@ import (
 	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/internal/indexer"
 	"github.com/citizenwallet/engine/internal/queue"
+	"github.com/citizenwallet/engine/internal/webhook"
 	"github.com/citizenwallet/engine/internal/ws"
 )
 
@@ -29,6 +31,8 @@ func main() {
 	noindex := flag.Bool("noindex", false, "disable indexing")
 
 	useropqbf := flag.Int("buffer", 1000, "userop queue buffer size (default: 1000)")
+
+	notify := flag.Bool("notify", false, "enable webhook notifications")
 
 	flag.Parse()
 	////////////////////
@@ -143,6 +147,20 @@ func main() {
 	////////////////////
 
 	////////////////////
+	// webhook
+	w := webhook.NewMessager(conf.DiscordURL, conf.ChainName, *notify)
+	defer func() {
+		if r := recover(); r != nil {
+			// in case of a panic, notify the webhook messager with an error notification
+			err := fmt.Errorf("recovered from panic: %v", r)
+			log.Default().Println(err)
+			w.NotifyError(ctx, err)
+			// sentry.CaptureException(err)
+		}
+	}()
+	////////////////////
+
+	////////////////////
 	// api
 	s := api.NewServer(chid, d, evm, useropq, pools)
 
@@ -161,7 +179,7 @@ func main() {
 
 	for err := range quitAck {
 		if err != nil {
-			// w.NotifyError(ctx, err)
+			w.NotifyError(ctx, err)
 			// sentry.CaptureException(err)
 			log.Fatal(err)
 		}
