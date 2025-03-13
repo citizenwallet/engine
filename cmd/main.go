@@ -93,6 +93,24 @@ func main() {
 	////////////////////
 
 	////////////////////
+	// webhook
+	log.Default().Println("starting webhook service...")
+
+	w := webhook.NewMessager(conf.DiscordURL, conf.ChainName, *notify)
+	defer func() {
+		if r := recover(); r != nil {
+			// in case of a panic, notify the webhook messager with an error notification
+			err := fmt.Errorf("recovered from panic: %v", r)
+			log.Default().Println(err)
+			w.NotifyError(ctx, err)
+			// sentry.CaptureException(err)
+		}
+	}()
+
+	w.Notify(ctx, "engine started")
+	////////////////////
+
+	////////////////////
 	// push queue
 	log.Default().Println("starting push queue service...")
 
@@ -104,6 +122,7 @@ func main() {
 	go func() {
 		for err := range pushqerr {
 			// TODO: handle errors coming from the queue
+			w.NotifyError(ctx, err)
 			log.Default().Println(err.Error())
 		}
 	}()
@@ -137,26 +156,13 @@ func main() {
 	go func() {
 		for err := range qerr {
 			// TODO: handle errors coming from the queue
+			w.NotifyError(ctx, err)
 			log.Default().Println(err.Error())
 		}
 	}()
 
 	go func() {
 		quitAck <- useropq.Start(op)
-	}()
-	////////////////////
-
-	////////////////////
-	// webhook
-	w := webhook.NewMessager(conf.DiscordURL, conf.ChainName, *notify)
-	defer func() {
-		if r := recover(); r != nil {
-			// in case of a panic, notify the webhook messager with an error notification
-			err := fmt.Errorf("recovered from panic: %v", r)
-			log.Default().Println(err)
-			w.NotifyError(ctx, err)
-			// sentry.CaptureException(err)
-		}
 	}()
 	////////////////////
 
