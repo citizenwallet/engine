@@ -27,6 +27,14 @@ func (m *Message) Respond(data any, err error) {
 		return
 	}
 
+	// Try to send on channel, recover from panic if channel is closed
+	defer func(me *Message) {
+		if r := recover(); r != nil {
+			// Channel was closed, ignore the panic
+			me.Response = nil
+		}
+	}(m)
+
 	*m.Response <- MessageResponse{
 		Data: data,
 		Err:  err,
