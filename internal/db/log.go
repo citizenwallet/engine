@@ -141,8 +141,26 @@ func (db *LogDB) CreateLogTableIndexes() error {
 // AddLog adds a log dest the db
 func (db *LogDB) AddLog(lg *engine.Log) error {
 
+	// start transaction
+	tx, err := db.db.BeginTx(db.ctx, pgx.TxOptions{
+		IsoLevel:       pgx.ReadCommitted,
+		AccessMode:     pgx.ReadWrite,
+		DeferrableMode: pgx.NotDeferrable,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Use a flag to track if we've committed the transaction
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback(db.ctx)
+		}
+	}()
+
 	// insert log on conflict do nothing
-	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
+	_, err = tx.Exec(db.ctx, fmt.Sprintf(`
 	INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, status, created_at, updated_at)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	ON CONFLICT (hash) DO NOTHING
@@ -154,20 +172,45 @@ func (db *LogDB) AddLog(lg *engine.Log) error {
 
 	// If ExtraData exists, store it in the data table
 	if lg.ExtraData != nil {
-		err = db.datadb.UpsertData(lg.Hash, lg.ExtraData)
+		err = db.datadb.UpsertData(tx, lg.Hash, lg.ExtraData)
 		if err != nil {
 			return err
 		}
 	}
 
+	// Commit the transaction
+	err = tx.Commit(db.ctx)
+	if err != nil {
+		return err
+	}
+
+	// Mark as committed so the deferred rollback won't execute
+	committed = true
 	return nil
 }
 
 // AddLogs adds a list of logs dest the db
 func (db *LogDB) AddLogs(lg []*engine.Log) error {
+	// start transaction
+	tx, err := db.db.BeginTx(db.ctx, pgx.TxOptions{
+		IsoLevel:       pgx.ReadCommitted,
+		AccessMode:     pgx.ReadWrite,
+		DeferrableMode: pgx.NotDeferrable,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Use a flag to track if we've committed the transaction
+	committed := false
+	defer func() {
+		if !committed {
+			tx.Rollback(db.ctx)
+		}
+	}()
 
 	for _, t := range lg {
-		_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
+		_, err := tx.Exec(db.ctx, fmt.Sprintf(`
 			INSERT INTO t_logs_%s (hash, tx_hash, nonce, sender, dest, value, data, status, created_at, updated_at)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (hash) DO UPDATE SET
@@ -190,13 +233,21 @@ func (db *LogDB) AddLogs(lg []*engine.Log) error {
 
 		// If ExtraData exists, store it in the data table
 		if t.ExtraData != nil {
-			err = db.datadb.UpsertData(t.Hash, t.ExtraData)
+			err = db.datadb.UpsertData(tx, t.Hash, t.ExtraData)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
+	// Commit the transaction
+	err = tx.Commit(db.ctx)
+	if err != nil {
+		return err
+	}
+
+	// Mark as committed so the deferred rollback won't execute
+	committed = true
 	return nil
 }
 

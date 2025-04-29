@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/citizenwallet/engine/pkg/common"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,8 +55,8 @@ func (db *DataDB) CreateDataTableIndexes() error {
 }
 
 // UpsertData adds or updates data for a given hash
-func (db *DataDB) UpsertData(hash string, data *json.RawMessage) error {
-	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
+func (db *DataDB) UpsertData(tx pgx.Tx, hash string, data *json.RawMessage) error {
+	_, err := tx.Exec(db.ctx, fmt.Sprintf(`
 	INSERT INTO t_logs_data_%s (hash, data, updated_at)
 	VALUES ($1, $2, CURRENT_TIMESTAMP)
 	ON CONFLICT (hash) 
