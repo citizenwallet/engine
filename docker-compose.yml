@@ -19,6 +19,20 @@ services:
     restart: on-failure
     healthcheck:
       test: "exit 0"
+  engine:
+    container_name: engine
+    build:
+      context: .
+      dockerfile: ./.docker/engine/Dockerfile
+    networks:
+      engine-net:
+        aliases:
+          - engine
+    ports:
+      - "3001:3001"
+    restart: on-failure
+    healthcheck:
+      test: "exit 0"
   engine_supabase:
     container_name: engine_supabase
     build:
@@ -36,20 +50,6 @@ services:
     restart: on-failure
     healthcheck:
       test: "exit 0"
-  engine:
-    container_name: engine
-    build:
-      context: .
-      dockerfile: ./.docker/engine/Dockerfile
-    networks:
-      engine-net:
-        aliases:
-          - engine
-    ports:
-      - "3001:3001"
-    restart: on-failure
-    healthcheck:
-      test: "exit 0"
   server:
     image: nginx:latest
     ports:
@@ -62,6 +62,9 @@ services:
       - certs_conf_volume:/etc/nginx/ssl/:ro
     networks:
       engine-net:
+        aliases:
+          - engine-server
+      supabase_default:
         aliases:
           - engine-server
   server-cert:
@@ -101,3 +104,5 @@ volumes:
 networks:
   engine-net:
     name: engine-net
+  supabase_default:
+    external: true
