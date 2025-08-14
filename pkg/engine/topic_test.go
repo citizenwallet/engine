@@ -196,6 +196,28 @@ func TestParseTopicsFromHashes(t *testing.T) {
 	}
 }
 
+func TestParseTopicsFromHashes_EmptyEventSignature(t *testing.T) {
+	// Test with empty event signature
+	event := &Event{EventSignature: ""}
+	topicHashes := []common.Hash{common.HexToHash("0x1234567890abcdef")}
+	data := []byte{}
+
+	_, err := ParseTopicsFromHashes(event, topicHashes, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event name is required")
+}
+
+func TestParseTopicsFromHashes_InvalidEventSignature(t *testing.T) {
+	// Test with invalid event signature
+	event := &Event{EventSignature: "InvalidEvent"}
+	topicHashes := []common.Hash{common.HexToHash("0x1234567890abcdef")}
+	data := []byte{}
+
+	_, err := ParseTopicsFromHashes(event, topicHashes, data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "event name is required")
+}
+
 func TestParseJSONBFilters(t *testing.T) {
 	tests := []struct {
 		name     string

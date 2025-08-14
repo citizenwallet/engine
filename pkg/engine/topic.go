@@ -49,9 +49,14 @@ func ParseTopicsFromHashes(event *Event, topicHashes []common.Hash, data []byte)
 		return nil, err
 	}
 
+	// Check if the ABI string is empty
+	if rawEventABI == "" {
+		return nil, fmt.Errorf("event signature is empty or invalid")
+	}
+
 	eventABI, err := abi.JSON(strings.NewReader(rawEventABI))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse ABI from event signature: %w", err)
 	}
 
 	// Create a new ABI with only non-indexed inputs

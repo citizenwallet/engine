@@ -240,6 +240,50 @@ func TestConstructABIFromEventSignature(t *testing.T) {
 	}
 }
 
+func TestEvent_ConstructABIFromEventSignature_EmptySignature(t *testing.T) {
+	tests := []struct {
+		name           string
+		eventSignature string
+		expectError    bool
+	}{
+		{
+			name:           "Empty event signature",
+			eventSignature: "",
+			expectError:    true,
+		},
+		{
+			name:           "Malformed event signature - missing parentheses",
+			eventSignature: "Transfer",
+			expectError:    true,
+		},
+		{
+			name:           "Malformed event signature - empty arguments",
+			eventSignature: "Transfer()",
+			expectError:    true,
+		},
+		{
+			name:           "Valid event signature",
+			eventSignature: "Transfer(address from, address to, uint256 value)",
+			expectError:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := &Event{EventSignature: tt.eventSignature}
+			abi, err := event.ConstructABIFromEventSignature()
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Empty(t, abi)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, abi)
+			}
+		})
+	}
+}
+
 func TestEvent_IsValidData(t *testing.T) {
 	tests := []struct {
 		name           string

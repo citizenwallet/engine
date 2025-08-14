@@ -44,7 +44,14 @@ func (e *Event) ParseEventSignature() (string, []string, []ArgType) {
 	}
 
 	parts := strings.SplitN(e.EventSignature, "(", 2)
+	if len(parts) != 2 {
+		return "", []string{}, []ArgType{}
+	}
+
 	eventName := strings.TrimSpace(parts[0])
+	if eventName == "" {
+		return "", []string{}, []ArgType{}
+	}
 
 	argNames := []string{}
 	argTypes := []ArgType{}
@@ -54,7 +61,14 @@ func (e *Event) ParseEventSignature() (string, []string, []ArgType) {
 
 	for i, arg := range argParts {
 		arg = strings.TrimSpace(arg)
+		if arg == "" {
+			continue // Skip empty arguments
+		}
+
 		parts := strings.Fields(arg)
+		if len(parts) == 0 {
+			continue // Skip arguments with no fields
+		}
 
 		isIndexed := false
 		var argName, argType string
@@ -83,10 +97,16 @@ func (e *Event) ParseEventSignature() (string, []string, []ArgType) {
 			// Unnamed argument
 			argName = strconv.Itoa(i)
 			argType = parts[0]
+		} else {
+			// Invalid argument format, skip it
+			continue
 		}
 
-		argNames = append(argNames, argName)
-		argTypes = append(argTypes, ArgType{Name: argType, Indexed: isIndexed})
+		// Only add valid arguments
+		if argType != "" {
+			argNames = append(argNames, argName)
+			argTypes = append(argTypes, ArgType{Name: argType, Indexed: isIndexed})
+		}
 	}
 
 	return eventName, argNames, argTypes
@@ -118,6 +138,13 @@ func (e *Event) ConstructABIFromEventSignature() (string, error) {
 	name, args, argTypes := e.ParseEventSignature()
 	if name == "" || len(args) == 0 || len(argTypes) == 0 {
 		return "", fmt.Errorf("event name is required")
+	}
+
+	// Validate that all argument types are non-empty
+	for i, argType := range argTypes {
+		if argType.Name == "" {
+			return "", fmt.Errorf("argument type at index %d is empty", i)
+		}
 	}
 
 	abi := fmt.Sprintf(`[{"name":"%s","type":"event","inputs":[`, name)

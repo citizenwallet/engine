@@ -2,6 +2,7 @@ package indexer
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -66,7 +67,10 @@ func (i *Indexer) ListenToLogs(ev *engine.Event, quitAck chan error) error {
 
 		topics, err := engine.ParseTopicsFromHashes(ev, log.Topics, log.Data)
 		if err != nil {
-			return err
+			// Log the error but don't crash the indexer
+			// This can happen when event signatures are malformed or empty
+			fmt.Printf("[%s] warning: failed to parse topics from log: %v\n", ev.Contract, err)
+			continue
 		}
 
 		b, err := topics.MarshalJSON()
