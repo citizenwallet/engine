@@ -1,5 +1,3 @@
-
-
 services:
   db:
     container_name: db
@@ -18,6 +16,23 @@ services:
           - engine-db
     ports:
       - "5432:5432"
+    restart: on-failure
+    healthcheck:
+      test: "exit 0"
+  engine_supabase:
+    container_name: engine_supabase
+    build:
+      context: .
+      dockerfile: ./.docker/engine/Dockerfile
+    networks:
+      engine-net:
+        aliases:
+          - engine-supabase
+      supabase_default:
+        aliases:
+          - engine-supabase
+    ports:
+      - "3001:3001"
     restart: on-failure
     healthcheck:
       test: "exit 0"
