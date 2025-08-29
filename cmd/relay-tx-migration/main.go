@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
+	"github.com/citizenwallet/engine/cmd/relay-tx-migration/logs"
 	"github.com/citizenwallet/engine/internal/config"
+	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/pkg/common"
 	"github.com/fiatjaf/eventstore/postgresql"
 	"github.com/fiatjaf/khatru"
-	"github.com/nbd-wtf/go-nostr"
 )
 
 func main() {
@@ -64,18 +64,28 @@ func main() {
 	log.Default().Println("node running for chain: ", chid.String())
 	////////////////////
 	////////////////////
-	// db
+	// nostr-postgres
 	log.Default().Println("starting internal db service...")
 
-	db := postgresql.PostgresBackend{
+	ndb := postgresql.PostgresBackend{
 		DatabaseURL: fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", conf.DBUser, conf.DBPassword, conf.DBHost, conf.DBPort, conf.DBName),
 	}
 
-	err = db.Init()
+	err = ndb.Init()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer ndb.Close()
+	////////////////////
+	////////////////////
+	// db
+	log.Default().Println("starting internal db service...")
+
+	d, err := db.NewDB(chid, conf.DBSecret, conf.DBUser, conf.DBPassword, conf.DBName, conf.DBPort, conf.DBHost, conf.DBReaderHost)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer d.Close()
 	////////////////////
 	////////////////////
 	// pubkey
@@ -94,26 +104,13 @@ func main() {
 	relay.Info.Description = conf.RelayInfoDescription
 	relay.Info.Icon = conf.RelayInfoIcon
 
-	relay.StoreEvent = append(relay.StoreEvent, db.SaveEvent)
-	relay.QueryEvents = append(relay.QueryEvents, db.QueryEvents)
-	relay.CountEvents = append(relay.CountEvents, db.CountEvents)
-	relay.DeleteEvent = append(relay.DeleteEvent, db.DeleteEvent)
-	relay.ReplaceEvent = append(relay.ReplaceEvent, db.ReplaceEvent)
+	relay.StoreEvent = append(relay.StoreEvent, ndb.SaveEvent)
+	relay.QueryEvents = append(relay.QueryEvents, ndb.QueryEvents)
+	relay.CountEvents = append(relay.CountEvents, ndb.CountEvents)
+	relay.DeleteEvent = append(relay.DeleteEvent, ndb.DeleteEvent)
+	relay.ReplaceEvent = append(relay.ReplaceEvent, ndb.ReplaceEvent)
 
-	ev := &nostr.Event{
-		PubKey:    pubkey,
-		CreatedAt: nostr.Timestamp(time.Now().Unix()),
-		Kind:      1,
-		Content:   "test message 🤖",
-		Tags:      []nostr.Tag{},
-	}
-
-	err = ev.Sign(conf.RelayPrivateKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = db.SaveEvent(ctx, ev)
+	err = logs.MigrateLogs(ctx, evm, conf.RelayPrivateKey, pubkey, d, &ndb)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/citizenwallet/engine/internal/config"
 	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/pkg/common"
 	"github.com/fiatjaf/eventstore/postgresql"
 	"github.com/fiatjaf/khatru"
-	"github.com/nbd-wtf/go-nostr"
 )
 
 func main() {
@@ -99,24 +97,6 @@ func main() {
 	relay.CountEvents = append(relay.CountEvents, db.CountEvents)
 	relay.DeleteEvent = append(relay.DeleteEvent, db.DeleteEvent)
 	relay.ReplaceEvent = append(relay.ReplaceEvent, db.ReplaceEvent)
-
-	ev := &nostr.Event{
-		PubKey:    pubkey,
-		CreatedAt: nostr.Timestamp(time.Now().Unix()),
-		Kind:      1,
-		Content:   "test message 🤖",
-		Tags:      []nostr.Tag{},
-	}
-
-	err = ev.Sign(conf.RelayPrivateKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = db.SaveEvent(ctx, ev)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	fmt.Println("running on :3334")
 	http.ListenAndServe(":3334", relay)

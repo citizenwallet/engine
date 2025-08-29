@@ -55,6 +55,13 @@ type Log struct {
 	Status    LogStatus        `json:"status"`
 }
 
+type LogTransferData struct {
+	To    string `json:"to"`
+	From  string `json:"from"`
+	Topic string `json:"topic"`
+	Value string `json:"value"`
+}
+
 // generate hash for transfer using a provided index, from, to and the tx hash
 func (t *Log) GenerateUniqueHash() string {
 	buf := new(bytes.Buffer)
