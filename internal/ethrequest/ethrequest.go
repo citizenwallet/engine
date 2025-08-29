@@ -189,6 +189,9 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 
 	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(10)))
 	gasTipCap := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(10)))
+	println("gasFeeCap", gasFeeCap.String())
+	println("gasTipCap", gasTipCap.String())
+	println("extraGas", extraGas)
 	if extraGas > 0 {
 		gasFeeCap = new(big.Int).Add(maxFeePerGas, new(big.Int).Mul(maxFeePerGas, big.NewInt(int64(extraGas))))
 		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(int64(extraGas))))
