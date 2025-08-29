@@ -176,7 +176,7 @@ func (m *MockEVMRequester) ListenForLogs(ctx context.Context, q ethereum.FilterQ
 }
 
 // NewTx implements indexer.EVMRequester.
-func (m *MockEVMRequester) NewTx(nonce uint64, from common.Address, to common.Address, data []byte, extraGas bool) (*types.Transaction, error) {
+func (m *MockEVMRequester) NewTx(nonce uint64, from common.Address, to common.Address, data []byte, extraGas int) (*types.Transaction, error) {
 	panic("unimplemented")
 }
 

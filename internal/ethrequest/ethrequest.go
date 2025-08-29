@@ -149,7 +149,7 @@ func (e *EthService) EstimateGasLimit(msg ethereum.CallMsg) (uint64, error) {
 	return gasLimit, err
 }
 
-func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, extraGas bool) (*types.Transaction, error) {
+func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, extraGas int) (*types.Transaction, error) {
 	baseFee, err := e.BaseFee()
 	if err != nil {
 		return nil, fmt.Errorf("error getting base fee: %w", err)
@@ -167,7 +167,7 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 		tip = minPriorityFee
 	}
 
-	buffer := new(big.Int).Div(tip, big.NewInt(100))
+	buffer := new(big.Int).Div(tip, big.NewInt(10))
 	maxPriorityFeePerGas := new(big.Int).Add(tip, buffer)
 
 	maxFeePerGas := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(baseFee, big.NewInt(2)))
@@ -189,9 +189,9 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 
 	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(10)))
 	gasTipCap := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(10)))
-	if extraGas {
-		gasFeeCap = new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(5)))
-		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(5)))
+	if extraGas > 0 {
+		gasFeeCap = new(big.Int).Add(maxFeePerGas, new(big.Int).Mul(maxFeePerGas, big.NewInt(int64(extraGas))))
+		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(int64(extraGas))))
 	}
 
 	// Create a new dynamic fee transaction

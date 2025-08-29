@@ -286,7 +286,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				for _, msg := range msgs {
 					txm, ok := msg.Message.(engine.UserOpMessage)
 					if ok {
-						txm.BumpGas = true
+						txm.BumpGas += 1
 						println("bumping gas for new message:", txm.BumpGas)
 						invalid = append(invalid, *engine.NewMessage(msg.ID, txm, msg.RetryCount, msg.Response))
 					}

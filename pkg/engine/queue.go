@@ -75,7 +75,7 @@ type UserOpMessage struct {
 	UserOp     UserOp
 	Data       any
 	ExtraData  any
-	BumpGas    bool
+	BumpGas    int
 }
 
 func NewMessage(id string, message any, retryCount int, response *chan MessageResponse) *Message {
