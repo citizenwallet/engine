@@ -2,17 +2,16 @@ package logs
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
-	"math"
-	"strconv"
+	"math/big"
 	"strings"
 	"time"
 
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ethrequest"
 	"github.com/citizenwallet/engine/pkg/engine"
+	eth "github.com/citizenwallet/nostr-eth"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -89,7 +88,7 @@ func getERC20Decimals(evm *ethrequest.EthService, contractAddress common.Address
 	return decimals, nil
 }
 
-func MigrateLogs(ctx context.Context, evm *ethrequest.EthService, secretKey, pubkey string, db *db.DB, ndb *postgresql.PostgresBackend) error {
+func MigrateLogs(ctx context.Context, evm *ethrequest.EthService, chainID *big.Int, secretKey, pubkey string, db *db.DB, ndb *postgresql.PostgresBackend) error {
 	events, err := db.EventDB.GetEvents()
 	if err != nil {
 		return err
@@ -101,20 +100,6 @@ func MigrateLogs(ctx context.Context, evm *ethrequest.EthService, secretKey, pub
 	for _, event := range events {
 		log.Printf("Migrating logs for event: %s", event.Name)
 		topic := event.GetTopic0FromEventSignature()
-
-		contract := common.HexToAddress(event.Contract)
-
-		symbol, err := getERC20Symbol(evm, contract)
-		if err != nil {
-			log.Printf("Error getting ERC20 symbol: %v", err)
-			return err
-		}
-
-		decimals, err := getERC20Decimals(evm, contract)
-		if err != nil {
-			log.Printf("Error getting ERC20 decimals: %v", err)
-			return err
-		}
 
 		offset := 0
 		for {
@@ -128,7 +113,11 @@ func MigrateLogs(ctx context.Context, evm *ethrequest.EthService, secretKey, pub
 			}
 
 			for _, log := range logs {
-				ev := convertLogToEvent(pubkey, log, symbol, decimals)
+
+				log.ChainID = chainID.String()
+				log.Hash = log.GenerateUniqueHash()
+
+				ev := convertLogToEvent(secretKey, log)
 
 				err = ev.Sign(secretKey)
 				if err != nil {
@@ -153,33 +142,12 @@ func MigrateLogs(ctx context.Context, evm *ethrequest.EthService, secretKey, pub
 	return nil
 }
 
-func convertLogToEvent(pubkey string, log *engine.Log, symbol string, decimals uint8) *nostr.Event {
-
-	transferData := engine.LogTransferData{}
-	b, err := json.Marshal(*log.Data)
+func convertLogToEvent(secretKey string, log *engine.Log) *nostr.Event {
+	ev, err := eth.CreateTxLogEvent(log, secretKey)
 	if err != nil {
+		fmt.Println("Error creating tx log event:", err)
 		return nil
 	}
 
-	fmt.Println("Log data:", string(b))
-
-	err = json.Unmarshal(b, &transferData)
-	if err != nil {
-		fmt.Println("Error unmarshalling log data:", err)
-		transferData.From = log.Sender
-		transferData.To = log.To
-		transferData.Value = "0"
-	}
-
-	// Convert string value to float64 for calculation
-	valueFloat, _ := strconv.ParseFloat(transferData.Value, 64)
-	formattedValue := fmt.Sprintf("%.2f", valueFloat/math.Pow10(int(decimals)))
-
-	return &nostr.Event{
-		PubKey:    pubkey,
-		CreatedAt: nostr.Timestamp(time.Now().Unix()),
-		Kind:      1,
-		Content:   fmt.Sprintf("%s %s sent from %s to %s \n\n%s", formattedValue, symbol, transferData.From, transferData.To, log.TxHash),
-		Tags:      []nostr.Tag{},
-	}
+	return ev
 }

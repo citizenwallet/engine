@@ -110,7 +110,7 @@ func main() {
 	relay.DeleteEvent = append(relay.DeleteEvent, ndb.DeleteEvent)
 	relay.ReplaceEvent = append(relay.ReplaceEvent, ndb.ReplaceEvent)
 
-	err = logs.MigrateLogs(ctx, evm, conf.RelayPrivateKey, pubkey, d, &ndb)
+	err = logs.MigrateLogs(ctx, evm, chid, conf.RelayPrivateKey, pubkey, d, &ndb)
 	if err != nil {
 		log.Fatal(err)
 	}

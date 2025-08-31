@@ -3,6 +3,7 @@ module github.com/citizenwallet/engine
 go 1.24.6
 
 require (
+	github.com/citizenwallet/nostr-eth v0.1.7
 	github.com/citizenwallet/smartcontracts v0.0.110
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/ethereum/go-ethereum v1.14.11
@@ -13,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.24
-	github.com/nbd-wtf/go-nostr v0.51.8
+	github.com/nbd-wtf/go-nostr v0.52.0
 	github.com/sethvargo/go-envconfig v1.1.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/image v0.20.0
