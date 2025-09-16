@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/citizenwallet/engine/internal/db"
 	"github.com/citizenwallet/engine/internal/ws"
@@ -18,13 +19,14 @@ var (
 type Indexer struct {
 	ctx context.Context
 	db  *db.DB
+	w   engine.WebhookMessager
 	evm engine.EVMRequester
 
 	pools *ws.ConnectionPools
 }
 
-func NewIndexer(ctx context.Context, db *db.DB, evm engine.EVMRequester, pools *ws.ConnectionPools) *Indexer {
-	return &Indexer{ctx: ctx, db: db, evm: evm, pools: pools}
+func NewIndexer(ctx context.Context, db *db.DB, w engine.WebhookMessager, evm engine.EVMRequester, pools *ws.ConnectionPools) *Indexer {
+	return &Indexer{ctx: ctx, db: db, w: w, evm: evm, pools: pools}
 }
 
 func (i *Indexer) Start() error {
@@ -36,6 +38,8 @@ func (i *Indexer) Start() error {
 	quitAck := make(chan error)
 
 	for _, ev := range evs {
+		i.w.Notify(i.ctx, fmt.Sprintf("indexing event %s at %s", ev.Name, ev.Contract))
+
 		go func() {
 			err := i.ListenToLogs(ev, quitAck)
 			if err != nil {

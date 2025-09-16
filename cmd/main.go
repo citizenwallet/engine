@@ -137,7 +137,7 @@ func main() {
 	if !*noindex {
 		log.Default().Println("starting indexer service...")
 
-		idx := indexer.NewIndexer(ctx, d, evm, pools)
+		idx := indexer.NewIndexer(ctx, d, w, evm, pools)
 		go func() {
 			quitAck <- idx.Start()
 		}()
