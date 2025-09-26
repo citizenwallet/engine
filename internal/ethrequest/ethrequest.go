@@ -219,10 +219,11 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	// Calculate gas buffer based on network conditions
 	var gasBuffer uint64
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// Low-cost network: Use fixed small buffer
-		gasBuffer = 10000 // 10k gas buffer
-		if gasBuffer < gasLimit/20 {
-			gasBuffer = gasLimit / 20 // At least 5% buffer
+		// Low-cost network: Use more conservative buffer to prevent failures
+		// Use 20% buffer or minimum 20k gas, whichever is higher
+		gasBuffer = gasLimit / 5 // 20% buffer
+		if gasBuffer < 20000 {
+			gasBuffer = 20000 // minimum 20k gas buffer
 		}
 	} else {
 		// Higher-cost network: Use percentage-based buffer
