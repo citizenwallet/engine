@@ -150,7 +150,7 @@ func main() {
 
 	op := queue.NewUserOpService(d, evm, pushqueue, pools)
 
-	useropq, qerr := queue.NewService("userop", 3, *useropqbf, ctx)
+	useropq, qerr := queue.NewService("userop", 10, *useropqbf, ctx)
 	defer useropq.Close()
 
 	go func() {

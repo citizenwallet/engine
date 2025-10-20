@@ -105,11 +105,15 @@ func (s *Service) Start(p Processor) error {
 						msg.RetryCount++
 
 						if len(s.queue) < 1 && len(msgs) == 1 {
+							// Retry with exponential backoff in a goroutine to avoid blocking the main loop
 							extraWait := time.Duration(msg.RetryCount) * time.Second
-							time.Sleep(extraWait)
+							go func(m engine.Message, wait time.Duration) {
+								time.Sleep(wait)
+								s.Enqueue(m)
+							}(msg, extraWait)
+						} else {
+							s.Enqueue(msg)
 						}
-
-						s.Enqueue(msg)
 						continue
 					}
 
