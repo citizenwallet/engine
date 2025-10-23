@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -34,6 +35,10 @@ type EthService struct {
 	rpc    *rpc.Client
 	client *ethclient.Client
 	ctx    context.Context
+
+	// Gas estimate tracking for future-nonce transactions
+	gasEstimates []uint64
+	gasEstMu     sync.Mutex
 }
 
 func (e *EthService) Context() context.Context {
@@ -48,11 +53,48 @@ func NewEthService(ctx context.Context, endpoint string) (*EthService, error) {
 
 	client := ethclient.NewClient(rpc)
 
-	return &EthService{rpc, client, ctx}, nil
+	return &EthService{
+		rpc:          rpc,
+		client:       client,
+		ctx:          ctx,
+		gasEstimates: make([]uint64, 0, 5),
+	}, nil
 }
 
 func (e *EthService) Close() {
 	e.client.Close()
+}
+
+// trackGasEstimate stores a successful gas estimate for future reference
+func (e *EthService) trackGasEstimate(gasLimit uint64) {
+	e.gasEstMu.Lock()
+	defer e.gasEstMu.Unlock()
+
+	// Add the new estimate
+	e.gasEstimates = append(e.gasEstimates, gasLimit)
+
+	// Keep only the last 5 estimates
+	if len(e.gasEstimates) > 5 {
+		e.gasEstimates = e.gasEstimates[len(e.gasEstimates)-5:]
+	}
+}
+
+// getAverageGasEstimate returns the average of recent gas estimates
+// Returns 0 if no estimates are available
+func (e *EthService) getAverageGasEstimate() uint64 {
+	e.gasEstMu.Lock()
+	defer e.gasEstMu.Unlock()
+
+	if len(e.gasEstimates) == 0 {
+		return 0
+	}
+
+	var sum uint64
+	for _, estimate := range e.gasEstimates {
+		sum += estimate
+	}
+
+	return sum / uint64(len(e.gasEstimates))
 }
 
 func (e *EthService) BlockTime(number *big.Int) (uint64, error) {
@@ -201,7 +243,7 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	// Calculate max fee per gas
 	maxFeePerGas := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(baseFee, baseFeeMultiplier))
 
-	// Prepare the call message
+	// Prepare the call message for gas estimation
 	msg := ethereum.CallMsg{
 		From:     from, // the account executing the function
 		To:       &to,
@@ -211,9 +253,25 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 		Data:     data, // the function call data
 	}
 
+	// Try to estimate gas
 	gasLimit, err := e.EstimateGasLimit(msg)
 	if err != nil {
-		return nil, fmt.Errorf("gas estimation failed: %w", err)
+		// Gas estimation failed (e.g., -32000 error from future nonce or state issues)
+		// Fall back to average of recent successful estimates
+		avgGas := e.getAverageGasEstimate()
+
+		if avgGas > 0 {
+			// Use the average of recent estimates
+			gasLimit = avgGas
+			fmt.Printf("Gas estimation failed, using average gas limit %d from recent estimates\n", gasLimit)
+		} else {
+			// No historical data, use conservative default
+			gasLimit = 500000
+			fmt.Printf("Gas estimation failed with no historical data, using fallback gas limit %d\n", gasLimit)
+		}
+	} else {
+		// Gas estimation succeeded, track it for future fallbacks
+		e.trackGasEstimate(gasLimit)
 	}
 
 	// Calculate gas buffer based on network conditions
