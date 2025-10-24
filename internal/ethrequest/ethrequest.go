@@ -204,21 +204,21 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	}
 
 	// Adaptive gas pricing based on network conditions
-	// If base fee is very low (< 0.01 Gwei), this is likely a low-cost network like Base
-	// If base fee is higher, use more conservative pricing
-	lowCostNetworkThreshold := big.NewInt(10000000) // 0.01 Gwei in wei
+	// If base fee is very low (< 0.5 Gwei), this is likely an L2 network like Base, Arbitrum, Optimism
+	// If base fee is higher, use more conservative pricing for L1 networks
+	lowCostNetworkThreshold := big.NewInt(500000000) // 0.5 Gwei in wei
 
 	var minPriorityFee *big.Int
 	var baseFeeMultiplier *big.Int
 	var gasBufferPercent uint64
 
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// Low-cost network (like Base): Use minimal fees
+		// L2 network (like Base, Arbitrum, Optimism): Use minimal fees
 		minPriorityFee = big.NewInt(1000000) // 0.001 Gwei
 		baseFeeMultiplier = big.NewInt(1)    // No multiplier
 		gasBufferPercent = 10                // 10% buffer
 	} else {
-		// Higher-cost network: Use more conservative pricing
+		// L1 network (Ethereum mainnet): Use more conservative pricing
 		minPriorityFee = big.NewInt(1000000000) // 1 Gwei
 		baseFeeMultiplier = big.NewInt(2)       // 2x multiplier for safety
 		gasBufferPercent = 50                   // 50% buffer for safety
@@ -232,10 +232,10 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	// Calculate max priority fee per gas with adaptive buffer
 	var maxPriorityFeePerGas *big.Int
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// Low-cost network: Use tip directly (no additional buffer)
+		// L2 network: Use tip directly (no additional buffer)
 		maxPriorityFeePerGas = tip
 	} else {
-		// Higher-cost network: Add 10% buffer for safety
+		// L1 network: Add 10% buffer for safety
 		buffer := new(big.Int).Div(tip, big.NewInt(10))
 		maxPriorityFeePerGas = new(big.Int).Add(tip, buffer)
 	}
@@ -277,8 +277,8 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	// Calculate gas buffer based on network conditions
 	var gasBuffer uint64
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// Low-cost network: Use more conservative buffer to prevent failures
-		// Use 20% buffer or minimum 20k gas, whichever is higher
+		// L2 network: Use more conservative buffer to prevent failures
+		// Use 50% buffer or minimum 20k gas, whichever is higher
 		gasBuffer = gasLimit / 2 // 50% buffer
 		if gasBuffer < 20000 {
 			gasBuffer = 20000 // minimum 20k gas buffer
@@ -287,7 +287,7 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 			}
 		}
 	} else {
-		// Higher-cost network: Use percentage-based buffer
+		// L1 network: Use percentage-based buffer
 		gasBuffer = gasLimit * gasBufferPercent / 100
 	}
 
