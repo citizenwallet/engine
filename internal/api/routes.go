@@ -114,6 +114,22 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 			}))
 		})
 
+		cr.Route("/rpc", func(cr chi.Router) {
+			cr.Post("/", withJSONRPCRequest(map[string]engine.RPCHandlerFunc{
+				"eth_sendUserOperation":     uop.Send,
+				"eth_chainId":               ch.ChainId,
+				"eth_call":                  ch.EthCall,
+				"eth_blockNumber":           ch.EthBlockNumber,
+				"eth_getBlockByNumber":      ch.EthGetBlockByNumber,
+				"eth_maxPriorityFeePerGas":  ch.EthMaxPriorityFeePerGas,
+				"eth_getTransactionReceipt": ch.EthGetTransactionReceipt,
+				"eth_getTransactionCount":   ch.EthGetTransactionCount,
+				"eth_estimateGas":           ch.EthEstimateGas,
+				"eth_gasPrice":              ch.EthGasPrice,
+				"eth_sendRawTransaction":    ch.EthSendRawTransaction,
+			}))
+		})
+
 		cr.Get("/events/{contract}/{topic}", events.HandleConnection) // for listening to events
 		cr.Get("/rpc", rpc.HandleConnection)                          // for sending RPC calls
 	})
