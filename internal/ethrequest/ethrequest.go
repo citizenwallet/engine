@@ -254,6 +254,7 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	}
 
 	// Try to estimate gas
+	// TODO: this should actually fail, probably due to another nonce in the queue not being mined yet, should instead just retry (bring nonce back down by 1)
 	gasLimit, err := e.EstimateGasLimit(msg)
 	if err != nil {
 		// Gas estimation failed (e.g., -32000 error from future nonce or state issues)
