@@ -301,15 +301,6 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(int64(extraGas))))
 	}
 
-	// Bump maxPriorityFeePerGas by 20% to optimize for speed
-	maxPriorityFeePerGas = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(20)), big.NewInt(100)))
-	// Recalculate gasTipCap from the bumped maxPriorityFeePerGas
-	if extraGas > 0 {
-		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(int64(extraGas))))
-	} else {
-		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(10)))
-	}
-
 	// Create a new dynamic fee transaction
 	tx := types.NewTx(&types.DynamicFeeTx{
 		Nonce:     nonce,
