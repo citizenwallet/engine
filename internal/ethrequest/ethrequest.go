@@ -214,12 +214,12 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
 		// L2 network (like Base, Arbitrum, Optimism): Use minimal fees
-		minPriorityFee = big.NewInt(1000000) // 0.001 Gwei
+		minPriorityFee = big.NewInt(2000000) // 0.002 Gwei
 		baseFeeMultiplier = big.NewInt(1)    // No multiplier
 		gasBufferPercent = 10                // 10% buffer
 	} else {
 		// L1 network (Ethereum mainnet): Use more conservative pricing
-		minPriorityFee = big.NewInt(1000000000) // 1 Gwei
+		minPriorityFee = big.NewInt(2000000000) // 2 Gwei
 		baseFeeMultiplier = big.NewInt(2)       // 2x multiplier for safety
 		gasBufferPercent = 50                   // 50% buffer for safety
 	}
@@ -293,8 +293,8 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	}
 
 	// Add small buffers to fee caps
-	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(10)))
-	gasTipCap := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(10)))
+	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(2)))
+	gasTipCap := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(2)))
 
 	if extraGas > 0 {
 		gasFeeCap = new(big.Int).Add(maxFeePerGas, new(big.Int).Mul(maxFeePerGas, big.NewInt(int64(extraGas))))
