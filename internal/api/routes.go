@@ -96,10 +96,8 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 		})
 
 		// rpc
-		cr.Route("/rpc/{pm_address}", func(cr chi.Router) {
+		cr.Route("/rpc", func(cr chi.Router) {
 			cr.Post("/", withJSONRPCRequest(map[string]engine.RPCHandlerFunc{
-				"pm_sponsorUserOperation":   pm.Sponsor,
-				"pm_ooSponsorUserOperation": pm.OOSponsor,
 				"eth_sendUserOperation":     uop.Send,
 				"eth_chainId":               ch.ChainId,
 				"eth_call":                  ch.EthCall,
@@ -112,10 +110,10 @@ func (s *Server) AddRoutes(cr *chi.Mux, b *bucket.Bucket) *chi.Mux {
 				"eth_gasPrice":              ch.EthGasPrice,
 				"eth_sendRawTransaction":    ch.EthSendRawTransaction,
 			}))
-		})
 
-		cr.Route("/rpc", func(cr chi.Router) {
-			cr.Post("/", withJSONRPCRequest(map[string]engine.RPCHandlerFunc{
+			cr.Post("/{pm_address}", withJSONRPCRequest(map[string]engine.RPCHandlerFunc{
+				"pm_sponsorUserOperation":   pm.Sponsor,
+				"pm_ooSponsorUserOperation": pm.OOSponsor,
 				"eth_sendUserOperation":     uop.Send,
 				"eth_chainId":               ch.ChainId,
 				"eth_call":                  ch.EthCall,
