@@ -276,21 +276,37 @@ func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, e
 	}
 
 	// Calculate gas buffer based on network conditions
+	// Ensure we always have sufficient headroom to prevent failures (target ~70% usage max)
 	var gasBuffer uint64
 	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// L2 network: Use more conservative buffer to prevent failures
-		// Use 50% buffer or minimum 20k gas, whichever is higher
+		// L2 network: Use conservative buffer to prevent failures
+		// Use 50% buffer to ensure we stay well below the limit
 		gasBuffer = gasLimit / 2 // 50% buffer
-		if gasBuffer < 20000 {
-			gasBuffer = 20000 // minimum 20k gas buffer
-			if gasBuffer < gasLimit/20 {
-				gasBuffer = gasLimit / 20 // At least 5% buffer
-			}
+		// Ensure minimum buffer of 50k or 30% of gasLimit, whichever is higher
+		minBuffer := gasLimit * 30 / 100 // 30% minimum
+		if minBuffer < 50000 {
+			minBuffer = 50000
+		}
+		if gasBuffer < minBuffer {
+			gasBuffer = minBuffer
 		}
 	} else {
-		// L1 network: Use percentage-based buffer
+		// L1 network: Use percentage-based buffer, but ensure minimum 30% headroom
 		gasBuffer = gasLimit * gasBufferPercent / 100
+		// Ensure at least 30% buffer to prevent tight usage scenarios
+		minBuffer := gasLimit * 30 / 100
+		if gasBuffer < minBuffer {
+			gasBuffer = minBuffer
+		}
 	}
+
+	// Add additional safety buffer to account for gas estimation variability
+	// This ensures we never get too close to the limit (target max 70% usage)
+	safetyBuffer := gasLimit * 5 / 100 // Additional 5% safety margin
+	if safetyBuffer < 10000 {
+		safetyBuffer = 10000 // Minimum 10k additional safety buffer
+	}
+	gasBuffer += safetyBuffer
 
 	// Add small buffers to fee caps
 	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(2)))
