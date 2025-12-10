@@ -31,6 +31,14 @@ type EthBlock struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// FeeHistoryResult holds the response from eth_feeHistory
+type FeeHistoryResult struct {
+	OldestBlock   string     `json:"oldestBlock"`
+	BaseFeePerGas []string   `json:"baseFeePerGas"`
+	GasUsedRatio  []float64  `json:"gasUsedRatio"`
+	Reward        [][]string `json:"reward"` // priority fees at requested percentiles
+}
+
 type EthService struct {
 	rpc    *rpc.Client
 	client *ethclient.Client
@@ -171,6 +179,78 @@ func (e *EthService) BaseFee() (*big.Int, error) {
 	return header.BaseFee, nil
 }
 
+// FeeHistory fetches historical fee data using eth_feeHistory
+// blockCount: number of blocks to fetch (typically 4-5)
+// percentiles: priority fee percentiles to fetch (e.g., [25, 50, 75])
+func (e *EthService) FeeHistory(blockCount int, percentiles []float64) (*FeeHistoryResult, error) {
+	var result FeeHistoryResult
+	err := e.rpc.Call(&result, "eth_feeHistory", hexutil.EncodeUint64(uint64(blockCount)), "latest", percentiles)
+	if err != nil {
+		return nil, fmt.Errorf("error calling eth_feeHistory: %w", err)
+	}
+	return &result, nil
+}
+
+// GetFeeEstimates returns recommended maxFeePerGas and maxPriorityFeePerGas
+// based on recent block history using eth_feeHistory
+func (e *EthService) GetFeeEstimates() (maxFeePerGas, maxPriorityFeePerGas *big.Int, err error) {
+	// Fetch 5 recent blocks with 50th percentile (median) priority fees
+	feeHistory, err := e.FeeHistory(5, []float64{50})
+	if err != nil {
+		return nil, nil, fmt.Errorf("error getting fee history: %w", err)
+	}
+
+	if len(feeHistory.BaseFeePerGas) == 0 {
+		return nil, nil, errors.New("no base fee data in fee history")
+	}
+
+	// Get the latest base fee (last element is for the pending block)
+	latestBaseFeeHex := feeHistory.BaseFeePerGas[len(feeHistory.BaseFeePerGas)-1]
+	latestBaseFee, err := hexutil.DecodeBig(latestBaseFeeHex)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding base fee: %w", err)
+	}
+
+	// Calculate median priority fee from recent blocks
+	var priorityFees []*big.Int
+	for _, rewards := range feeHistory.Reward {
+		if len(rewards) > 0 {
+			fee, err := hexutil.DecodeBig(rewards[0]) // 50th percentile
+			if err == nil && fee.Sign() > 0 {
+				priorityFees = append(priorityFees, fee)
+			}
+		}
+	}
+
+	// Calculate average of priority fees from recent blocks
+	var avgPriorityFee *big.Int
+	if len(priorityFees) > 0 {
+		sum := big.NewInt(0)
+		for _, fee := range priorityFees {
+			sum.Add(sum, fee)
+		}
+		avgPriorityFee = new(big.Int).Div(sum, big.NewInt(int64(len(priorityFees))))
+	} else {
+		// Fallback to eth_maxPriorityFeePerGas if no reward data
+		avgPriorityFee, err = e.MaxPriorityFeePerGas()
+		if err != nil {
+			return nil, nil, fmt.Errorf("error getting max priority fee: %w", err)
+		}
+	}
+
+	// Add 20% buffer to priority fee for faster inclusion
+	priorityBuffer := new(big.Int).Div(avgPriorityFee, big.NewInt(5))
+	maxPriorityFeePerGas = new(big.Int).Add(avgPriorityFee, priorityBuffer)
+
+	// Calculate maxFeePerGas: baseFee * 1.25 + priorityFee
+	// The 25% buffer accounts for 1-2 blocks of base fee fluctuation
+	baseFeeBuffer := new(big.Int).Div(latestBaseFee, big.NewInt(4))
+	bufferedBaseFee := new(big.Int).Add(latestBaseFee, baseFeeBuffer)
+	maxFeePerGas = new(big.Int).Add(bufferedBaseFee, maxPriorityFeePerGas)
+
+	return maxFeePerGas, maxPriorityFeePerGas, nil
+}
+
 func (e *EthService) EstimateGasPrice() (*big.Int, error) {
 	return e.client.SuggestGasPrice(e.ctx)
 }
@@ -192,132 +272,50 @@ func (e *EthService) EstimateGasLimit(msg ethereum.CallMsg) (uint64, error) {
 }
 
 func (e *EthService) NewTx(nonce uint64, from, to common.Address, data []byte, extraGas int) (*types.Transaction, error) {
-	baseFee, err := e.BaseFee()
+	// Get fee estimates based on recent block history (similar to MetaMask)
+	maxFeePerGas, maxPriorityFeePerGas, err := e.GetFeeEstimates()
 	if err != nil {
-		return nil, fmt.Errorf("error getting base fee: %w", err)
+		return nil, fmt.Errorf("error getting fee estimates: %w", err)
 	}
-
-	// Set the priority fee per gas (miner tip)
-	tip, err := e.MaxPriorityFeePerGas()
-	if err != nil {
-		return nil, fmt.Errorf("error getting max priority fee: %w", err)
-	}
-
-	// Adaptive gas pricing based on network conditions
-	// If base fee is very low (< 0.5 Gwei), this is likely an L2 network like Base, Arbitrum, Optimism
-	// If base fee is higher, use more conservative pricing for L1 networks
-	lowCostNetworkThreshold := big.NewInt(500000000) // 0.5 Gwei in wei
-
-	var minPriorityFee *big.Int
-	var baseFeeMultiplier *big.Int
-	var gasBufferPercent uint64
-
-	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// L2 network (like Base, Arbitrum, Optimism): Use minimal fees
-		minPriorityFee = big.NewInt(2000000) // 0.002 Gwei
-		baseFeeMultiplier = big.NewInt(1)    // No multiplier
-		gasBufferPercent = 10                // 10% buffer
-	} else {
-		// L1 network (Ethereum mainnet): Use more conservative pricing
-		minPriorityFee = big.NewInt(2000000000) // 2 Gwei
-		baseFeeMultiplier = big.NewInt(2)       // 2x multiplier for safety
-		gasBufferPercent = 50                   // 50% buffer for safety
-	}
-
-	// Apply minimum priority fee
-	if tip.Cmp(minPriorityFee) < 0 {
-		tip = minPriorityFee
-	}
-
-	// Calculate max priority fee per gas with adaptive buffer
-	var maxPriorityFeePerGas *big.Int
-	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// L2 network: Use tip directly (no additional buffer)
-		maxPriorityFeePerGas = tip
-	} else {
-		// L1 network: Add 10% buffer for safety
-		buffer := new(big.Int).Div(tip, big.NewInt(10))
-		maxPriorityFeePerGas = new(big.Int).Add(tip, buffer)
-	}
-
-	// Calculate max fee per gas
-	maxFeePerGas := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(baseFee, baseFeeMultiplier))
 
 	// Prepare the call message for gas estimation
 	msg := ethereum.CallMsg{
-		From:     from, // the account executing the function
+		From:     from,
 		To:       &to,
-		Gas:      0,    // set to 0 for estimation
-		GasPrice: nil,  // set to nil for estimation
-		Value:    nil,  // set to nil for estimation
-		Data:     data, // the function call data
+		Gas:      0,
+		GasPrice: nil,
+		Value:    nil,
+		Data:     data,
 	}
 
-	// Try to estimate gas
-	// TODO: this should actually fail, probably due to another nonce in the queue not being mined yet, should instead just retry (bring nonce back down by 1)
+	// Estimate gas limit
 	gasLimit, err := e.EstimateGasLimit(msg)
 	if err != nil {
-		// Gas estimation failed (e.g., -32000 error from future nonce or state issues)
-		// Fall back to average of recent successful estimates
+		// Gas estimation failed - fall back to average of recent successful estimates
 		avgGas := e.getAverageGasEstimate()
-
 		if avgGas > 0 {
-			// Use the average of recent estimates
 			gasLimit = avgGas
 			fmt.Printf("Gas estimation failed, using average gas limit %d from recent estimates\n", gasLimit)
 		} else {
-			// No historical data, use conservative default
 			gasLimit = 500000
 			fmt.Printf("Gas estimation failed with no historical data, using fallback gas limit %d\n", gasLimit)
 		}
 	} else {
-		// Gas estimation succeeded, track it for future fallbacks
 		e.trackGasEstimate(gasLimit)
 	}
 
-	// Calculate gas buffer based on network conditions
-	// Ensure we always have sufficient headroom to prevent failures (target ~70% usage max)
-	var gasBuffer uint64
-	if baseFee.Cmp(lowCostNetworkThreshold) < 0 {
-		// L2 network: Use conservative buffer to prevent failures
-		// Use 50% buffer to ensure we stay well below the limit
-		gasBuffer = gasLimit / 2 // 50% buffer
-		// Ensure minimum buffer of 50k or 30% of gasLimit, whichever is higher
-		minBuffer := gasLimit * 30 / 100 // 30% minimum
-		if minBuffer < 50000 {
-			minBuffer = 50000
-		}
-		if gasBuffer < minBuffer {
-			gasBuffer = minBuffer
-		}
-	} else {
-		// L1 network: Use percentage-based buffer, but ensure minimum 30% headroom
-		gasBuffer = gasLimit * gasBufferPercent / 100
-		// Ensure at least 30% buffer to prevent tight usage scenarios
-		minBuffer := gasLimit * 30 / 100
-		if gasBuffer < minBuffer {
-			gasBuffer = minBuffer
-		}
-	}
+	// Add 20% gas buffer for safety
+	gasBuffer := gasLimit / 5
 
-	// Add additional safety buffer to account for gas estimation variability
-	// This ensures we never get too close to the limit (target max 70% usage)
-	safetyBuffer := gasLimit * 5 / 100 // Additional 5% safety margin
-	if safetyBuffer < 10000 {
-		safetyBuffer = 10000 // Minimum 10k additional safety buffer
-	}
-	gasBuffer += safetyBuffer
-
-	// Add small buffers to fee caps
-	gasFeeCap := new(big.Int).Add(maxFeePerGas, new(big.Int).Div(maxFeePerGas, big.NewInt(2)))
-	gasTipCap := new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Div(maxPriorityFeePerGas, big.NewInt(2)))
-
+	// Apply extraGas multiplier if specified (for retries with higher fees)
+	gasFeeCap := maxFeePerGas
+	gasTipCap := maxPriorityFeePerGas
 	if extraGas > 0 {
-		gasFeeCap = new(big.Int).Add(maxFeePerGas, new(big.Int).Mul(maxFeePerGas, big.NewInt(int64(extraGas))))
-		gasTipCap = new(big.Int).Add(maxPriorityFeePerGas, new(big.Int).Mul(maxPriorityFeePerGas, big.NewInt(int64(extraGas))))
+		multiplier := big.NewInt(int64(1 + extraGas))
+		gasFeeCap = new(big.Int).Mul(maxFeePerGas, multiplier)
+		gasTipCap = new(big.Int).Mul(maxPriorityFeePerGas, multiplier)
 	}
 
-	// Create a new dynamic fee transaction
 	tx := types.NewTx(&types.DynamicFeeTx{
 		Nonce:     nonce,
 		GasFeeCap: gasFeeCap,
