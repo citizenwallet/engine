@@ -439,12 +439,12 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 		go func(txmsLocal []engine.UserOpMessage, insertedLogsLocal map[common.Address][]*engine.Log, sponsorLocal common.Address, signedTxHashLocal string) {
 			// async wait for the transaction to be mined
-			waitErr := s.evm.WaitForTx(signedTx, 16)
+			waitErr := s.evm.WaitForTx(signedTx, 60)
 			if waitErr != nil {
 				// Transaction failed - mark user ops as reverted
 				for _, txm := range txmsLocal {
 					if txm.UserOpHash != "" {
-						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusReverted)
+						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusTimeout)
 					}
 				}
 

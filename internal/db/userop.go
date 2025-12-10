@@ -21,6 +21,7 @@ const (
 	UserOpStatusSubmitted UserOpStatus = "submitted"
 	UserOpStatusSuccess   UserOpStatus = "success"
 	UserOpStatusReverted  UserOpStatus = "reverted"
+	UserOpStatusTimeout   UserOpStatus = "timeout"
 )
 
 // StoredUserOp represents a persisted user operation
