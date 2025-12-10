@@ -82,7 +82,7 @@ func (s *TimeoutService) checkTimeoutUserOps() {
 			}
 		} else {
 			// Receipt found - mark as success since the tx was mined
-			err := s.db.UserOpDB.UpdateStatus(op.UserOpHash, db.UserOpStatusSuccess)
+			err := s.db.UserOpDB.UpdateStatusToSuccess(op.UserOpHash)
 			if err != nil {
 				log.Default().Printf("error updating userop %s to success: %s\n", op.UserOpHash, err.Error())
 			} else {

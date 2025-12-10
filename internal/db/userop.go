@@ -26,17 +26,18 @@ const (
 
 // StoredUserOp represents a persisted user operation
 type StoredUserOp struct {
-	UserOpHash string           `json:"user_op_hash"`
-	TxHash     *string          `json:"tx_hash"`
-	Status     UserOpStatus     `json:"status"`
-	ValidUntil int64            `json:"valid_until"`
-	ValidAfter int64            `json:"valid_after"`
-	Sender     string           `json:"sender"`
-	Paymaster  string           `json:"paymaster"`
-	EntryPoint string           `json:"entry_point"`
-	UserOp     *json.RawMessage `json:"user_op"`
-	CreatedAt  time.Time        `json:"created_at"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	UserOpHash       string           `json:"user_op_hash"`
+	TxHash           *string          `json:"tx_hash"`
+	Status           UserOpStatus     `json:"status"`
+	ValidUntil       int64            `json:"valid_until"`
+	ValidAfter       int64            `json:"valid_after"`
+	Sender           string           `json:"sender"`
+	Paymaster        string           `json:"paymaster"`
+	EntryPoint       string           `json:"entry_point"`
+	UserOp           *json.RawMessage `json:"user_op"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+	ConfirmationTime *int64           `json:"confirmation_time"`
 }
 
 type UserOpDB struct {
@@ -72,7 +73,8 @@ func (db *UserOpDB) CreateUserOpTable() error {
 		entry_point TEXT NOT NULL,
 		user_op JSONB NOT NULL,
 		created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
-		updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
+		updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+		confirmation_time BIGINT
 	);
 	`, db.suffix))
 
@@ -139,6 +141,27 @@ func (db *UserOpDB) UpdateStatus(userOpHash string, status UserOpStatus) error {
 	_, err := db.db.Exec(db.ctx, fmt.Sprintf(`
 	UPDATE t_userops_%s SET status = $1, updated_at = $2 WHERE user_op_hash = $3
 	`, db.suffix), status, time.Now().UTC(), userOpHash)
+
+	return err
+}
+
+// UpdateStatusToSuccess updates the status to success and calculates the confirmation time in milliseconds
+func (db *UserOpDB) UpdateStatusToSuccess(userOpHash string) error {
+	// Get the created_at time first
+	var createdAt time.Time
+	err := db.rdb.QueryRow(db.ctx, fmt.Sprintf(`
+	SELECT created_at FROM t_userops_%s WHERE user_op_hash = $1
+	`, db.suffix), userOpHash).Scan(&createdAt)
+	if err != nil {
+		return err
+	}
+
+	// Calculate confirmation time in milliseconds
+	confirmationTime := time.Now().UTC().Sub(createdAt).Milliseconds()
+
+	_, err = db.db.Exec(db.ctx, fmt.Sprintf(`
+	UPDATE t_userops_%s SET status = $1, updated_at = $2, confirmation_time = $3 WHERE user_op_hash = $4
+	`, db.suffix), UserOpStatusSuccess, time.Now().UTC(), confirmationTime, userOpHash)
 
 	return err
 }

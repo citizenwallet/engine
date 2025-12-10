@@ -460,7 +460,7 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				// Transaction succeeded - mark user ops as success
 				for _, txm := range txmsLocal {
 					if txm.UserOpHash != "" {
-						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusSuccess)
+						s.db.UserOpDB.UpdateStatusToSuccess(txm.UserOpHash)
 					}
 				}
 			}
