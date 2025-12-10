@@ -193,9 +193,10 @@ func (e *EthService) FeeHistory(blockCount int, percentiles []float64) (*FeeHist
 
 // GetFeeEstimates returns recommended maxFeePerGas and maxPriorityFeePerGas
 // based on recent block history using eth_feeHistory
+// Optimized for fast inclusion - pays premium to be prioritized by validators
 func (e *EthService) GetFeeEstimates() (maxFeePerGas, maxPriorityFeePerGas *big.Int, err error) {
-	// Fetch 5 recent blocks with 50th percentile (median) priority fees
-	feeHistory, err := e.FeeHistory(5, []float64{50})
+	// Fetch 5 recent blocks with 90th percentile - we want to outbid most transactions
+	feeHistory, err := e.FeeHistory(5, []float64{90})
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting fee history: %w", err)
 	}
@@ -211,41 +212,38 @@ func (e *EthService) GetFeeEstimates() (maxFeePerGas, maxPriorityFeePerGas *big.
 		return nil, nil, fmt.Errorf("error decoding base fee: %w", err)
 	}
 
-	// Calculate median priority fee from recent blocks
-	var priorityFees []*big.Int
+	// Find maximum priority fee from recent blocks at 90th percentile
+	// This ensures we're paying more than 90% of recent transactions
+	var maxRecentPriority *big.Int
 	for _, rewards := range feeHistory.Reward {
 		if len(rewards) > 0 {
-			fee, err := hexutil.DecodeBig(rewards[0]) // 50th percentile
+			fee, err := hexutil.DecodeBig(rewards[0]) // 90th percentile
 			if err == nil && fee.Sign() > 0 {
-				priorityFees = append(priorityFees, fee)
+				if maxRecentPriority == nil || fee.Cmp(maxRecentPriority) > 0 {
+					maxRecentPriority = fee
+				}
 			}
 		}
 	}
 
-	// Calculate average of priority fees from recent blocks
-	var avgPriorityFee *big.Int
-	if len(priorityFees) > 0 {
-		sum := big.NewInt(0)
-		for _, fee := range priorityFees {
-			sum.Add(sum, fee)
-		}
-		avgPriorityFee = new(big.Int).Div(sum, big.NewInt(int64(len(priorityFees))))
-	} else {
-		// Fallback to eth_maxPriorityFeePerGas if no reward data
-		avgPriorityFee, err = e.MaxPriorityFeePerGas()
-		if err != nil {
-			return nil, nil, fmt.Errorf("error getting max priority fee: %w", err)
-		}
+	// If no valid priority fees found, use base fee as starting point
+	if maxRecentPriority == nil || maxRecentPriority.Sign() == 0 {
+		maxRecentPriority = new(big.Int).Set(latestBaseFee)
 	}
 
-	// Add 20% buffer to priority fee for faster inclusion
-	priorityBuffer := new(big.Int).Div(avgPriorityFee, big.NewInt(5))
-	maxPriorityFeePerGas = new(big.Int).Add(avgPriorityFee, priorityBuffer)
+	// Add 50% buffer on top of 90th percentile to ensure we're at the front
+	priorityBuffer := new(big.Int).Div(maxRecentPriority, big.NewInt(2))
+	maxPriorityFeePerGas = new(big.Int).Add(maxRecentPriority, priorityBuffer)
 
-	// Calculate maxFeePerGas: baseFee * 1.25 + priorityFee
-	// The 25% buffer accounts for 1-2 blocks of base fee fluctuation
-	baseFeeBuffer := new(big.Int).Div(latestBaseFee, big.NewInt(4))
-	bufferedBaseFee := new(big.Int).Add(latestBaseFee, baseFeeBuffer)
+	// Ensure minimum priority fee of 5x base fee for aggressive prioritization
+	minPriority := new(big.Int).Mul(latestBaseFee, big.NewInt(5))
+	if maxPriorityFeePerGas.Cmp(minPriority) < 0 {
+		maxPriorityFeePerGas = minPriority
+	}
+
+	// Calculate maxFeePerGas: baseFee * 2 + priorityFee
+	// 2x base fee buffer handles several blocks of potential congestion
+	bufferedBaseFee := new(big.Int).Mul(latestBaseFee, big.NewInt(2))
 	maxFeePerGas = new(big.Int).Add(bufferedBaseFee, maxPriorityFeePerGas)
 
 	return maxFeePerGas, maxPriorityFeePerGas, nil
