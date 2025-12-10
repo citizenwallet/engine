@@ -333,3 +333,45 @@ func (db *UserOpDB) GetValidUntilValidAfter(userOpHash string) (validUntil, vali
 
 	return big.NewInt(vUntil), big.NewInt(vAfter), nil
 }
+
+// GetTimeoutUserOpsOlderThan retrieves timeout user operations where updated_at is at least X minutes ago
+func (db *UserOpDB) GetTimeoutUserOpsOlderThan(minutes int) ([]*StoredUserOp, error) {
+	cutoff := time.Now().UTC().Add(-time.Duration(minutes) * time.Minute)
+
+	rows, err := db.rdb.Query(db.ctx, fmt.Sprintf(`
+	SELECT user_op_hash, tx_hash, status, valid_until, valid_after, sender, paymaster, entry_point, user_op, created_at, updated_at
+	FROM t_userops_%s
+	WHERE status = $1 AND updated_at <= $2
+	`, db.suffix), UserOpStatusTimeout, cutoff)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*StoredUserOp{}, nil
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ops []*StoredUserOp
+	for rows.Next() {
+		var op StoredUserOp
+		err := rows.Scan(
+			&op.UserOpHash,
+			&op.TxHash,
+			&op.Status,
+			&op.ValidUntil,
+			&op.ValidAfter,
+			&op.Sender,
+			&op.Paymaster,
+			&op.EntryPoint,
+			&op.UserOp,
+			&op.CreatedAt,
+			&op.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, &op)
+	}
+
+	return ops, nil
+}

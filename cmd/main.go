@@ -167,6 +167,16 @@ func main() {
 	////////////////////
 
 	////////////////////
+	// timeout checker
+	log.Default().Println("starting timeout checker service...")
+
+	timeoutChecker := queue.NewTimeoutService(d, evm)
+	go func() {
+		quitAck <- timeoutChecker.Start(ctx)
+	}()
+	////////////////////
+
+	////////////////////
 	// api
 	s := api.NewServer(chid, d, evm, useropq, pools)
 
