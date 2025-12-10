@@ -42,12 +42,12 @@ func TestProcessMessages(t *testing.T) {
 
 	t.Run("TxMessages", func(t *testing.T) {
 		testCases := []engine.Message{
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
 		}
 
 		q, qerr := NewService("tx", 3, 10, nil)
@@ -93,17 +93,17 @@ func TestProcessMessages(t *testing.T) {
 
 	t.Run("TxMessages with 1 invalid", func(t *testing.T) {
 		testCases := []engine.Message{
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
 			{ID: "invalid", CreatedAt: time.Now(), RetryCount: 0, Message: "invalid"},
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
-			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
+			*engine.NewTxMessage(common.Address{}, common.Address{}, common.Big0, engine.UserOp{}, "", 0, 0, nil, nil),
 		}
 
 		q, qerr := NewService("tx", 3, 10, nil)

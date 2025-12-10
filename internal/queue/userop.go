@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -89,8 +90,20 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 	// go through each sponsor and process the messages
 	for sponsor, txms := range txmBySponsor {
-		sampleTxm := txms[0] // use the first txm to get information we need to process the messages
 		msgs := messagesBySponsor[sponsor]
+
+		// Sort messages by validAfter (smallest first) for proper retry ordering
+		sort.Slice(txms, func(i, j int) bool {
+			return txms[i].ValidAfter < txms[j].ValidAfter
+		})
+		// Also sort the corresponding messages in the same order
+		sort.Slice(msgs, func(i, j int) bool {
+			txmI := msgs[i].Message.(engine.UserOpMessage)
+			txmJ := msgs[j].Message.(engine.UserOpMessage)
+			return txmI.ValidAfter < txmJ.ValidAfter
+		})
+
+		sampleTxm := txms[0] // use the first txm to get information we need to process the messages
 
 		// Fetch the sponsor's corresponding private key from the database
 		sponsorKey, err := s.db.SponsorDB.GetSponsor(sampleTxm.Paymaster.Hex())
@@ -315,6 +328,13 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 					}
 				}
 
+				// Mark user ops as reverted
+				for _, txm := range txms {
+					if txm.UserOpHash != "" {
+						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusReverted)
+					}
+				}
+
 				invalid = append(invalid, msgs...)
 				for range msgs {
 					errors = append(errors, err)
@@ -337,6 +357,13 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 
 						// broadcast updates to connected clients
 						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
+					}
+				}
+
+				// Mark user ops as reverted
+				for _, txm := range txms {
+					if txm.UserOpHash != "" {
+						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusReverted)
 					}
 				}
 
@@ -364,6 +391,13 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 				}
 			}
 
+			// Mark user ops as reverted due to insufficient funds
+			for _, txm := range txms {
+				if txm.UserOpHash != "" {
+					s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusReverted)
+				}
+			}
+
 			// Return the error about insufficient funds
 			invalid = append(invalid, msgs...)
 			for range msgs {
@@ -377,6 +411,13 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			})
 			s.mu.Unlock()
 			continue
+		}
+
+		// Update user op status to submitted with tx hash
+		for _, txm := range txms {
+			if txm.UserOpHash != "" {
+				s.db.UserOpDB.UpdateStatusAndTxHash(txm.UserOpHash, db.UserOpStatusSubmitted, signedTxHash)
+			}
 		}
 
 		// Respond to the messages with the tx hash
@@ -396,11 +437,18 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 			}
 		}
 
-		go func() {
+		go func(txmsLocal []engine.UserOpMessage, insertedLogsLocal map[common.Address][]*engine.Log, sponsorLocal common.Address, signedTxHashLocal string) {
 			// async wait for the transaction to be mined
-			err = s.evm.WaitForTx(signedTx, 16)
-			if err != nil {
-				for _, logs := range insertedLogs {
+			waitErr := s.evm.WaitForTx(signedTx, 16)
+			if waitErr != nil {
+				// Transaction failed - mark user ops as reverted
+				for _, txm := range txmsLocal {
+					if txm.UserOpHash != "" {
+						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusReverted)
+					}
+				}
+
+				for _, logs := range insertedLogsLocal {
 					for _, log := range logs {
 						ldb.RemoveLog(log.Hash)
 
@@ -408,15 +456,22 @@ func (s *UserOpService) Process(messages []engine.Message) (invalid []engine.Mes
 						s.pools.BroadcastMessage(engine.WSMessageTypeRemove, log)
 					}
 				}
+			} else {
+				// Transaction succeeded - mark user ops as success
+				for _, txm := range txmsLocal {
+					if txm.UserOpHash != "" {
+						s.db.UserOpDB.UpdateStatus(txm.UserOpHash, db.UserOpStatusSuccess)
+					}
+				}
 			}
 
 			// remove from inProgress
 			s.mu.Lock()
-			s.inProgress[sponsor] = comm.Filter(s.inProgress[sponsor], func(s string) bool {
-				return s != signedTxHash
+			s.inProgress[sponsorLocal] = comm.Filter(s.inProgress[sponsorLocal], func(s string) bool {
+				return s != signedTxHashLocal
 			})
 			s.mu.Unlock()
-		}()
+		}(txms, insertedLogs, sponsor, signedTxHash)
 	}
 
 	return invalid, errors

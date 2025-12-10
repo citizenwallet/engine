@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -111,4 +112,67 @@ func (u *UserOp) Copy() UserOp {
 	}
 
 	return copy
+}
+
+// GetUserOpHash computes the ERC-4337 user operation hash.
+// This is computed as keccak256(keccak256(pack(userOp)), entryPoint, chainId)
+// where pack(userOp) is the ABI encoding of the user operation fields (excluding signature).
+func (op *UserOp) GetUserOpHash(entryPoint common.Address, chainId *big.Int) common.Hash {
+	// Pack the user operation fields per ERC-4337 spec
+	packed := packUserOp(op)
+	innerHash := crypto.Keccak256Hash(packed)
+
+	// Define the types for the outer hash
+	bytes32Ty, _ := abi.NewType("bytes32", "bytes32", nil)
+	addressTy, _ := abi.NewType("address", "address", nil)
+	uint256Ty, _ := abi.NewType("uint256", "uint256", nil)
+
+	args := abi.Arguments{
+		{Type: bytes32Ty},
+		{Type: addressTy},
+		{Type: uint256Ty},
+	}
+
+	// Pack (innerHash, entryPoint, chainId)
+	outer, _ := args.Pack(innerHash, entryPoint, chainId)
+
+	return crypto.Keccak256Hash(outer)
+}
+
+// packUserOp packs the user operation fields for hashing per ERC-4337.
+// The packing is: abi.encode(sender, nonce, keccak256(initCode), keccak256(callData),
+// callGasLimit, verificationGasLimit, preVerificationGas, maxFeePerGas,
+// maxPriorityFeePerGas, keccak256(paymasterAndData))
+func packUserOp(op *UserOp) []byte {
+	addressTy, _ := abi.NewType("address", "address", nil)
+	uint256Ty, _ := abi.NewType("uint256", "uint256", nil)
+	bytes32Ty, _ := abi.NewType("bytes32", "bytes32", nil)
+
+	args := abi.Arguments{
+		{Type: addressTy}, // sender
+		{Type: uint256Ty}, // nonce
+		{Type: bytes32Ty}, // keccak256(initCode)
+		{Type: bytes32Ty}, // keccak256(callData)
+		{Type: uint256Ty}, // callGasLimit
+		{Type: uint256Ty}, // verificationGasLimit
+		{Type: uint256Ty}, // preVerificationGas
+		{Type: uint256Ty}, // maxFeePerGas
+		{Type: uint256Ty}, // maxPriorityFeePerGas
+		{Type: bytes32Ty}, // keccak256(paymasterAndData)
+	}
+
+	packed, _ := args.Pack(
+		op.Sender,
+		op.Nonce,
+		crypto.Keccak256Hash(op.InitCode),
+		crypto.Keccak256Hash(op.CallData),
+		op.CallGasLimit,
+		op.VerificationGasLimit,
+		op.PreVerificationGas,
+		op.MaxFeePerGas,
+		op.MaxPriorityFeePerGas,
+		crypto.Keccak256Hash(op.PaymasterAndData),
+	)
+
+	return packed
 }

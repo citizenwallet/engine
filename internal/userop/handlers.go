@@ -211,22 +211,45 @@ func (s *Service) Send(r *http.Request) (any, error) {
 
 	entryPoint := common.HexToAddress(epAddr)
 
-	// Create a new message
-	message := engine.NewTxMessage(addr, entryPoint, s.chainId, userop, data, xdata)
+	// Compute the user op hash
+	userOpHash := userop.GetUserOpHash(entryPoint, s.chainId)
+	userOpHashHex := userOpHash.Hex()
+
+	// Persist the user operation to the database
+	err = s.db.UserOpDB.AddUserOp(
+		userOpHashHex,
+		validUntil.Int64(),
+		validAfter.Int64(),
+		userop.Sender.Hex(),
+		addr.Hex(),
+		epAddr,
+		&userop,
+	)
+	if err != nil {
+		return nil, errors.New("error persisting user operation: " + err.Error())
+	}
+
+	// Create a new message with user op hash and validity info
+	message := engine.NewTxMessage(addr, entryPoint, s.chainId, userop, userOpHashHex, validUntil.Int64(), validAfter.Int64(), data, xdata)
 
 	// Enqueue the message
 	s.useropq.Enqueue(*message)
 
 	resp, err := message.WaitForResponse()
 	if err != nil {
+		// Mark the user op as reverted if there's an error
+		s.db.UserOpDB.UpdateStatus(userOpHashHex, db.UserOpStatusReverted)
 		return nil, err
 	}
 
-	txHash, ok := resp.(string)
+	// We still wait for the response to ensure the operation was queued successfully,
+	// but we return the user op hash instead of the tx hash
+	_, ok = resp.(string)
 	if !ok {
-		return nil, errors.New("error unmarshalling tx hash")
+		s.db.UserOpDB.UpdateStatus(userOpHashHex, db.UserOpStatusReverted)
+		return nil, errors.New("error processing user operation")
 	}
 
-	// Return the message ID
-	return txHash, nil
+	// Return the user op hash instead of the tx hash
+	return userOpHashHex, nil
 }

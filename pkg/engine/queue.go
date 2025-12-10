@@ -73,6 +73,9 @@ type UserOpMessage struct {
 	EntryPoint common.Address
 	ChainId    *big.Int
 	UserOp     UserOp
+	UserOpHash string
+	ValidUntil int64
+	ValidAfter int64
 	Data       any
 	ExtraData  any
 	BumpGas    int
@@ -88,16 +91,19 @@ func NewMessage(id string, message any, retryCount int, response *chan MessageRe
 	}
 }
 
-func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, data, xdata *json.RawMessage) *Message {
+func NewTxMessage(pm, entrypoint common.Address, chainId *big.Int, userop UserOp, userOpHash string, validUntil, validAfter int64, data, xdata *json.RawMessage) *Message {
 	op := UserOpMessage{
 		Paymaster:  pm,
 		EntryPoint: entrypoint,
 		ChainId:    chainId,
 		UserOp:     userop,
+		UserOpHash: userOpHash,
+		ValidUntil: validUntil,
+		ValidAfter: validAfter,
 		Data:       data,
 		ExtraData:  xdata,
 	}
 
 	respch := make(chan MessageResponse)
-	return NewMessage(common.Bytes2Hex(userop.Signature), op, 0, &respch)
+	return NewMessage(userOpHash, op, 0, &respch)
 }

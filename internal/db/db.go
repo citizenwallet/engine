@@ -31,6 +31,7 @@ type DB struct {
 	EventDB     *EventDB
 	SponsorDB   *SponsorDB
 	LogDB       *LogDB
+	UserOpDB    *UserOpDB
 	PushTokenDB map[string]*PushTokenDB
 }
 
@@ -71,6 +72,11 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rho
 		return nil, err
 	}
 
+	userOpDB, err := NewUserOpDB(ctx, db, db, evname)
+	if err != nil {
+		return nil, err
+	}
+
 	d := &DB{
 		ctx:       ctx,
 		chainID:   chainID,
@@ -79,6 +85,7 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rho
 		EventDB:   eventDB,
 		SponsorDB: sponsorDB,
 		LogDB:     logDB,
+		UserOpDB:  userOpDB,
 	}
 
 	// check if db exists before opening, since we use rwc mode
@@ -160,6 +167,28 @@ func NewDB(chainID *big.Int, secret, username, password, dbname, port, host, rho
 
 		// create indexes
 		err = datadb.CreateDataTableIndexes()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	log.Default().Println("creating userop db for: ", evname)
+
+	// check if userop table exists before creating
+	exists, err = d.UserOpTableExists(evname)
+	if err != nil {
+		return nil, err
+	}
+
+	if !exists {
+		// create table
+		err = userOpDB.CreateUserOpTable()
+		if err != nil {
+			return nil, err
+		}
+
+		// create indexes
+		err = userOpDB.CreateUserOpTableIndexes()
 		if err != nil {
 			return nil, err
 		}
@@ -262,6 +291,18 @@ func (db *DB) PushTokenTableExists(suffix string) (bool, error) {
 // DataTableExists checks if a table exists in the database
 func (db *DB) DataTableExists(suffix string) (bool, error) {
 	tableName := fmt.Sprintf("t_logs_data_%s", suffix)
+	var exists bool
+	err := db.rdb.QueryRow(db.ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", tableName).Scan(&exists)
+	if err != nil {
+		// A database error occurred
+		return false, err
+	}
+	return exists, nil
+}
+
+// UserOpTableExists checks if the user operations table exists in the database
+func (db *DB) UserOpTableExists(suffix string) (bool, error) {
+	tableName := fmt.Sprintf("t_userops_%s", suffix)
 	var exists bool
 	err := db.rdb.QueryRow(db.ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = $1)", tableName).Scan(&exists)
 	if err != nil {
