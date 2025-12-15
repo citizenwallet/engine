@@ -112,8 +112,18 @@ func (s *Service) EthGetTransactionReceipt(r *http.Request) (any, error) {
 		// Check if this is a user op hash in our database
 		userOp, err := s.db.UserOpDB.GetUserOp(hash)
 		if err == nil && userOp != nil {
-			// Found a user op - return synthetic receipt based on status
-			return s.buildSyntheticReceipt(userOp), nil
+			// If UserOp has a TxHash, get the real receipt from chain
+			if userOp.TxHash != nil && *userOp.TxHash != "" {
+				var result any
+				txHashParams, _ := json.Marshal([]string{*userOp.TxHash})
+				err := s.evm.Call("eth_getTransactionReceipt", &result, txHashParams)
+				if err != nil {
+					return nil, err
+				}
+				return result, nil
+			}
+			// No TxHash yet - return null (standard blockchain behavior for unknown/pending tx)
+			return nil, nil
 		}
 	}
 
@@ -126,83 +136,6 @@ func (s *Service) EthGetTransactionReceipt(r *http.Request) (any, error) {
 	}
 
 	return result, nil
-}
-
-// buildSyntheticReceipt creates a transaction receipt-like response from a stored user operation
-func (s *Service) buildSyntheticReceipt(userOp *db.StoredUserOp) map[string]interface{} {
-	// For pending/submitted status, return null (standard behavior for pending txs)
-	if userOp.Status == db.UserOpStatusPending || userOp.Status == db.UserOpStatusSubmitted {
-		return nil
-	}
-
-	// Build a synthetic receipt
-	receipt := map[string]interface{}{
-		"transactionHash": userOp.UserOpHash,
-		"from":            userOp.Sender,
-		"to":              userOp.EntryPoint,
-		"contractAddress": nil,
-		"logs":            []interface{}{},
-		"logsBloom":       "0x" + "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-		"type":            "0x2",
-	}
-
-	// Set status based on user op status
-	switch userOp.Status {
-	case db.UserOpStatusSuccess:
-		receipt["status"] = "0x1"
-	case db.UserOpStatusReverted:
-		receipt["status"] = "0x0"
-	default:
-		receipt["status"] = "0x0"
-	}
-
-	// If we have a real tx hash, try to get actual block info from the chain
-	if userOp.TxHash != nil && *userOp.TxHash != "" {
-		// Try to get the actual receipt from chain for block info
-		var chainReceipt map[string]interface{}
-		hashParams := []string{*userOp.TxHash}
-		paramsJSON, _ := json.Marshal(hashParams)
-		err := s.evm.Call("eth_getTransactionReceipt", &chainReceipt, paramsJSON)
-		if err == nil && chainReceipt != nil {
-			// Copy block info from chain receipt
-			if blockHash, ok := chainReceipt["blockHash"]; ok {
-				receipt["blockHash"] = blockHash
-			}
-			if blockNumber, ok := chainReceipt["blockNumber"]; ok {
-				receipt["blockNumber"] = blockNumber
-			}
-			if transactionIndex, ok := chainReceipt["transactionIndex"]; ok {
-				receipt["transactionIndex"] = transactionIndex
-			}
-			if gasUsed, ok := chainReceipt["gasUsed"]; ok {
-				receipt["gasUsed"] = gasUsed
-			}
-			if cumulativeGasUsed, ok := chainReceipt["cumulativeGasUsed"]; ok {
-				receipt["cumulativeGasUsed"] = cumulativeGasUsed
-			}
-			if effectiveGasPrice, ok := chainReceipt["effectiveGasPrice"]; ok {
-				receipt["effectiveGasPrice"] = effectiveGasPrice
-			}
-		} else {
-			// Fallback values if we can't get chain receipt
-			receipt["blockHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000"
-			receipt["blockNumber"] = hexutil.EncodeBig(big.NewInt(0))
-			receipt["transactionIndex"] = "0x0"
-			receipt["gasUsed"] = "0x0"
-			receipt["cumulativeGasUsed"] = "0x0"
-			receipt["effectiveGasPrice"] = "0x0"
-		}
-	} else {
-		// No tx hash yet, use placeholder values
-		receipt["blockHash"] = "0x0000000000000000000000000000000000000000000000000000000000000000"
-		receipt["blockNumber"] = hexutil.EncodeBig(big.NewInt(0))
-		receipt["transactionIndex"] = "0x0"
-		receipt["gasUsed"] = "0x0"
-		receipt["cumulativeGasUsed"] = "0x0"
-		receipt["effectiveGasPrice"] = "0x0"
-	}
-
-	return receipt
 }
 
 func (s *Service) EthGetTransactionCount(r *http.Request) (any, error) {
